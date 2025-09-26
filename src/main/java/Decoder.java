@@ -1,6 +1,4 @@
-import java.util.Arrays;
 import java.util.Base64;
-import java.util.Scanner;
 
 public class Decoder {
 
@@ -8,7 +6,7 @@ public class Decoder {
     static String green = null;
     static String blue = null;
 
-    static byte[][] data=new byte[Main.parts+2][];
+    static byte[][] data=new byte[MainJ.parts+2][];
 
 
 
@@ -62,7 +60,7 @@ public class Decoder {
     }
 
     private static void parseAmber(String amber) {
-        String[] DATA64 =new String[Main.parts+2];
+        String[] DATA64 =new String[MainJ.parts+2];
 
         DATA64[0]="nSV0HP/3HGM8toQPGNA/0kthOXNsYHxqL7xNlBTOSavKdjchYRF/75mFcsvDRwwIZ3fUY8CsgIzkyW/7RAvjmS0/26higvEz0abntsvD5DjWFoV9g0/Bd8DF3dyU76lZtaQZytmnFWkvETryFMG4ZtaHIoXoW9V/gL6CI3JfMZo=";
         DATA64[1]="8FwHeZz3HGM8toQPGNA/0kthOXNsYHxqL7xNlBTOSavKdjchYRF/75mFcsvDRwwIZ3fUY8CsgIzkyW/7RAvjmS0/26higvEz0abntsvD5DjWFoV9g0/Bd8DF3dyU76lZtaQZytmnFWkvETryFMG4ZtaHIoXoW9V/gL6CI3JfMZo=";
