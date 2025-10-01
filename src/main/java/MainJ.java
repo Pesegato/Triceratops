@@ -36,7 +36,7 @@ public class MainJ {
     static JsonAdapter<TokenPart> jsonAdapterTP = moshi.adapter(TokenPart.class);
     static JsonAdapter<Certificate> jsonAdapterC = moshi.adapter(Certificate.class);
 
-    public static void buildToken(String label, String color, String secret, int parts) throws IOException {
+    public static void buildToken(String label, String color, String secret, int parts) {
 
         Token token = new Token(label, color);
         MainJ.parts = parts;
@@ -164,7 +164,7 @@ public class MainJ {
         Document document = new Document();
         try {
             document.setPageSize(PageSize.A4);
-            PdfWriter pdfWriter = PdfWriter.getInstance(document, new FileOutputStream("tk_" + tokenPart.getIndex() + ".pdf"));
+            PdfWriter pdfWriter = PdfWriter.getInstance(document, new FileOutputStream("/app/output/tk_" + tokenPart.getIndex() + ".pdf"));
             document.open();
 
             PdfContentByte cb = pdfWriter.getDirectContent();

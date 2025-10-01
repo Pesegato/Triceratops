@@ -4,11 +4,13 @@ plugins {
     kotlin("jvm") version "2.2.0"
     application
     id("com.palantir.git-version") version "4.0.0"
+    id("com.google.cloud.tools.jib") version "3.4.3"
 }
 
 application {
     mainClass = "MainKt"
 }
+
 group = "com.pesegato"
 val gitVersion: groovy.lang.Closure<String> by extra
 version = gitVersion()
@@ -24,6 +26,9 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.zxing:javase:3.5.3")
     implementation("com.squareup.moshi:moshi:1.15.2")
+    //togliendo queste due sotto si risparmiano 3mb (303 -> 300)
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.2")
+    implementation(kotlin("reflect"))
 // Adds all JVM interface modules
     implementation("com.github.ajalt.mordant:mordant:${mordantVersion}")
 // optional extensions for running animations with coroutines
@@ -49,4 +54,26 @@ tasks.withType<ProcessResources>() {
 
 kotlin {
     jvmToolchain(21)
+}
+
+jib {
+    from {
+        image = "eclipse-temurin:21-jre-jammy"
+    }
+    to {
+        image = "triceratops-app"
+    }
+    container {
+        mainClass = "MainKt"
+    }
+}
+
+tasks.register<Exec>("pruneDockerImages") {
+    group = "Docker"
+    description = "Removes stale (dangling) Docker images created by Jib."
+    commandLine("docker", "image", "prune", "--force", "--filter", "dangling=true")
+}
+
+tasks.named("jibDockerBuild") {
+    finalizedBy("pruneDockerImages")
 }
