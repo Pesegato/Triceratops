@@ -36,6 +36,10 @@ fun main(args: Array<String>) {
             bottomTitle = Text(yellow("v.0.1"), align = TextAlign.RIGHT, width = 20)
         )
     )
+
+    val onDocker = args.isNotEmpty() && args[0] == "-docker"
+    MainJ.setDockerEnvironment(onDocker)
+    t.println("running in docker: $onDocker")
     /*
     t.println(red("Hello, world!"), whitespace = Whitespace.NORMAL)
 
@@ -72,10 +76,19 @@ fun main(args: Array<String>) {
 
     MainJ.buildToken(label,color,secret, number);
 
+    val name = t.prompt("Name of the Device")
+
     val publicKey = RSACrypt.generateOrGetKeyPair(label)
 
-    val cert = MainJ.getCertificate("pc", Base64.encode(publicKey.encoded))
-    println("Certificate: "+ Base64.encode(cert))
+    val cert = MainJ.getCertificate(name, Base64.encode(publicKey.encoded))
+    //val c64 = Base64.encode(cert)
+    try {
+        MainJ.showQRCodeOnScreenSwing(name, cert)
+    } catch (e : Exception) {
+        println("Headless environment, cannot show QR code on screen, falling back to text")
+        MainJ.showQRCodeOnScreen(cert)
+    }
+    println("Certificate: $cert")
 
     /**
     val terminal = Terminal()

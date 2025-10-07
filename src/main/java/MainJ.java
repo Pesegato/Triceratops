@@ -4,30 +4,37 @@ import com.google.zxing.client.j2se.MatrixToImageConfig;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
-import com.lowagie.text.*;
-import com.lowagie.text.Image;
-import com.lowagie.text.pdf.BaseFont;
-import com.lowagie.text.pdf.PdfContentByte;
-import com.lowagie.text.pdf.PdfWriter;
+import com.itextpdf.io.font.constants.StandardFonts;
+import com.itextpdf.io.image.ImageDataFactory;
+import com.itextpdf.kernel.colors.Color;
+import com.itextpdf.kernel.colors.ColorConstants;
+import com.itextpdf.kernel.colors.DeviceRgb;
+import com.itextpdf.kernel.font.PdfFont;
+import com.itextpdf.kernel.font.PdfFontFactory;
+import com.itextpdf.kernel.geom.PageSize;
+import com.itextpdf.kernel.pdf.PdfDocument;
+import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.layout.Document;
+import com.itextpdf.layout.element.Image;
+import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.layout.properties.HorizontalAlignment;
 import com.pesegato.data.Certificate;
 import com.pesegato.data.Token;
 import com.pesegato.data.TokenPart;
 import com.squareup.moshi.JsonAdapter;
 import com.squareup.moshi.Moshi;
 
+import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.security.PublicKey;
 import java.util.*;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 public class MainJ {
     static int SIZE = 128;
     static int parts = 0;
@@ -140,18 +147,18 @@ public class MainJ {
 
         System.out.println(" DATA64[0]=\"" + A64 + "\";");
 
-        TokenPart p0 = new TokenPart(token, A64, 0);
+        TokenPart p0 = new TokenPart(token, A64, 0, parts + 2);
 
         //String json = jsonAdapter.toJson(p0);
         //System.out.println(json);
 
-        writePDF(p0);
+        writePDFTokenPart(p0);
         for (int i = 0; i < parts; i++) {
             System.out.println(" DATA64[" + (i + 1) + "]=\"" + DATA64[i] + "\";");
-            writePDF(new TokenPart(token, DATA64[i], i + 1));
+            writePDFTokenPart(new TokenPart(token, DATA64[i], i + 1, parts + 2));
         }
         System.out.println(" DATA64[" + (parts + 1) + "]=\"" + C64 + "\";");
-        writePDF(new TokenPart(token, C64, (parts + 1)));
+        writePDFTokenPart(new TokenPart(token, C64, (parts + 1), parts + 2));
 
         //System.out.println("r:" + new String(AB64));
         //System.out.println("g:" + new String(AC64));
@@ -160,42 +167,88 @@ public class MainJ {
 
     }
 
-    private static void writePDF(TokenPart tokenPart) {
-        Document document = new Document();
+    public static void showQRCodeOnScreenSwing(String name, String text) {
         try {
-            document.setPageSize(PageSize.A4);
-            PdfWriter pdfWriter = PdfWriter.getInstance(document, new FileOutputStream("/app/output/tk_" + tokenPart.getIndex() + ".pdf"));
-            document.open();
+            QRCodeWriter qrCodeWriter = new QRCodeWriter();
+            // Create a larger QR code for screen display
+            BitMatrix bitMatrix = qrCodeWriter.encode(text, BarcodeFormat.QR_CODE, 400, 400);
 
-            PdfContentByte cb = pdfWriter.getDirectContent();
+            BufferedImage bufferedImage = MatrixToImageWriter.toBufferedImage(bitMatrix);
 
-            BaseFont bf = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
-            cb.beginText();
-            cb.setFontAndSize(bf, 12);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "LABEL:________", 70, 690, 0);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "COLOR:________", 200, 690, 0);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "PART:________", 330, 690, 0);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "CODE:________", 460, 690, 0);
-            bf = BaseFont.createFont(BaseFont.COURIER, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
-            cb.setFontAndSize(bf, 12);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, tokenPart.getLabel(), 120, 692, 0);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, tokenPart.getColor().toString(), 250, 692, 0);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, String.valueOf(tokenPart.getIndex()), 380, 692, 0);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "4589", 510, 692, 0);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "Forged on " + new Date() + " with version " + version, 70, 50, 0);
-            cb.setFontAndSize(bf, 5);
-            bf = BaseFont.createFont(BaseFont.TIMES_ROMAN, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
-            cb.setFontAndSize(bf, 12);
-            /*
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "Gentile " + gui.paziente.getText() + ", il Suo appuntamento è il " + df.format(model.getValue()) + ".", 70, 470, 0);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "La sera prima inizi la terapia antibiotica:", 70, 450, 0);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "Amoxicillina + Acido Clavulanico 1 gr. 1 cpr ogni 12 ore per 6 gg", 70, 430, 0);
-            cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "Inquadrare il codice con l'app DRM ti ricorda.", 70, 270, 0);
+            JFrame frame = new JFrame("Certificate for "+name);
+            frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            frame.getContentPane().add(new JLabel(new ImageIcon(bufferedImage)));
+            frame.pack();
+            frame.setLocationRelativeTo(null); // Center on screen
+            frame.setVisible(true);
 
-             */
-            cb.endText();
+        } catch (WriterException e) {
+            System.err.println("Could not generate QR Code: " + e.getMessage());
+        }
+    }
 
-// Use ZXing to create the QR Code
+    public static void showQRCodeOnScreen(String text) {
+        try {
+            QRCodeWriter qrCodeWriter = new QRCodeWriter();
+            // Create a QR code for the console. The size will affect the detail.
+            BitMatrix bitMatrix = qrCodeWriter.encode(text, BarcodeFormat.QR_CODE, 40, 40);
+
+            // Print the QR code to the console
+            for (int y = 0; y < bitMatrix.getHeight(); y++) {
+                for (int x = 0; x < bitMatrix.getWidth(); x++) {
+                    // Use block characters for better visual representation
+                    System.out.print(bitMatrix.get(x, y) ? "██" : "  ");
+                }
+                System.out.println();
+            }
+
+        } catch (WriterException e) {
+            System.err.println("Could not generate QR Code: " + e.getMessage());
+        }
+    }
+
+    private static void writePDFTokenPart(TokenPart tokenPart) {
+        try {
+            PdfWriter writer = new PdfWriter(getPath() + tokenPart.getPrettyName() + ".pdf");
+            PdfDocument pdfDoc = new PdfDocument(writer);
+            Document document = new Document(pdfDoc, PageSize.A4);
+
+            PdfFont helvetica = PdfFontFactory.createFont(StandardFonts.HELVETICA);
+            PdfFont courier = PdfFontFactory.createFont(StandardFonts.COURIER);
+
+            // Replicating showTextAligned with Paragraphs at fixed positions
+            document.add(new Paragraph("LABEL:________").setFont(helvetica).setFontSize(12).setFixedPosition(200, 690, 200));
+            document.add(new Paragraph("COLOR:________").setFont(helvetica).setFontSize(12).setFixedPosition(200, 650, 200));
+            document.add(new Paragraph("PART:________").setFont(helvetica).setFontSize(12).setFixedPosition(200, 610, 200));
+            document.add(new Paragraph("CODE:________").setFont(helvetica).setFontSize(12).setFixedPosition(200, 570, 200));
+            document.add(new Paragraph("Scan the QR code below with the T9s token app\nto create an ephemeral token").setFont(helvetica).setFontSize(12).setFixedPosition(200, 470, 350));
+
+            Color fgColor = switch (tokenPart.getColor()) {
+                case GREEN, RED, BLUE, GRAY, BLACK -> ColorConstants.WHITE;
+                case WHITE -> ColorConstants.BLACK;
+            };
+
+            Color bgColor = switch (tokenPart.getColor()) {
+                case GREEN -> new DeviceRgb(0,128,0);
+                case RED -> ColorConstants.RED;
+                case BLUE -> ColorConstants.BLUE;
+                case WHITE -> ColorConstants.LIGHT_GRAY;
+                case GRAY -> ColorConstants.GRAY;
+                case BLACK -> ColorConstants.BLACK;
+            };
+
+            document.add(new Paragraph(tokenPart.getLabel()).setFont(courier).setFontSize(32)
+                    //.setHorizontalAlignment(HorizontalAlignment.RIGHT)
+                    .setFontColor(fgColor)
+                    .setBackgroundColor(bgColor));
+            document.add(new Paragraph(tokenPart.getLabel()).setFont(courier).setFontSize(12).setFixedPosition(250, 692, 200));
+            document.add(new Paragraph(tokenPart.getColor().toString()).setFont(courier).setFontSize(12).setFixedPosition(250, 652, 200));
+            document.add(new Paragraph(String.valueOf(tokenPart.getPrettyPrintParts())).setFont(courier).setFontSize(12).setFixedPosition(250, 612, 200));
+            document.add(new Paragraph("4589").setFont(courier).setFontSize(12).setFixedPosition(250, 574, 200));
+
+            document.add(new Paragraph("Forged on " + new Date() + "\nwith version " + version).setFont(courier).setFontSize(12).setFixedPosition(200, 50, 400));
+
+            // Use ZXing to create the QR Code
             QRCodeWriter qrCodeWriter = new QRCodeWriter();
             BitMatrix bitMatrix = qrCodeWriter
                     .encode(jsonAdapterTP.toJson(tokenPart), BarcodeFormat.QR_CODE,
@@ -284,23 +337,21 @@ public class MainJ {
                     (bitMatrix, "PNG", pngOutputStream, con);
             byte[] pngData = pngOutputStream.toByteArray();
 
-            Image securedby = Image.getInstance(MainJ.class.getResource("securedby.png"));
-            securedby.scalePercent(33);
-            securedby.setAlignment(Element.ALIGN_CENTER);
+            Image securedby = new Image(ImageDataFactory.create(Objects.requireNonNull(MainJ.class.getResource("securedby.png"))));
+            securedby.scale(0.33f, 0.33f);
+            securedby.setRotationAngle(Math.PI / 2);
+            securedby.setHorizontalAlignment(HorizontalAlignment.LEFT);
             document.add(securedby);
 
-            Image image = Image.getInstance(pngData);
+            Image image = new Image(ImageDataFactory.create(pngData));
             image.scaleAbsolute(350f, 350f);
-            image.setAlignment(Element.ALIGN_CENTER);
-            image.setAbsolutePosition(100, 100);
+            image.setFixedPosition(200, 100);
 
             document.add(image);
-        } catch (DocumentException | WriterException de) {
-            System.err.println(de.getMessage());
-        } catch (IOException ioe) {
-            System.err.println(ioe.getMessage());
+            document.close();
+        } catch (WriterException | IOException e) {
+            System.err.println(e.getMessage());
         }
-        document.close();
     }
 
     static byte[] concat(byte[] x, byte[] y) throws IOException {
@@ -310,8 +361,8 @@ public class MainJ {
         return outputStream.toByteArray();
     }
 
-    public static byte[] getCertificate(String label, String publicKey){
-        return jsonAdapterC.toJson(new Certificate(label, publicKey)).getBytes(UTF_8);
+    public static String getCertificate(String label, String publicKey) {
+        return jsonAdapterC.toJson(new Certificate(label, publicKey));
     }
 
     public static void main(String[] args) {
@@ -331,5 +382,18 @@ public class MainJ {
 
         scanIn.close();
 
+    }
+    private static boolean isDockerEnvironment = false;
+
+    public static void setDockerEnvironment(boolean isDocker) {
+        isDockerEnvironment = isDocker;
+    }
+
+    public static String getPath() {
+        if (isDockerEnvironment) {
+            return "/app/output/";
+        } else {
+            return System.getProperty("user.home") + "/.Triceratops/";
+        }
     }
 }

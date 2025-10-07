@@ -69,14 +69,16 @@ public class RSACrypt {
     }
 
     public static String getPrivateKeyPath() {
-        String path=System.getProperty("user.home") + "/.Triceratops/";
+        String path=MainJ.getPath()+"keystore/";
+        System.out.println("PATH: "+path);
         new File(path).mkdirs();
-        return System.getProperty("user.home") + "/.Triceratops/private.key";
+        return path + "private.key";
     }
 
     public static String getPublicKeyPath() {
-        String path=System.getProperty("user.home") + "/.Triceratops/";
+        String path=MainJ.getPath()+"keystore/";
+        System.out.println("PATH: "+path);
         new File(path).mkdirs();
-        return System.getProperty("user.home") + "/.Triceratops/public.key";
+        return path + "public.key";
     }
 }
