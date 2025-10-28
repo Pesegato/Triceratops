@@ -5,8 +5,23 @@ import com.github.ajalt.mordant.terminal.prompt
 import com.github.ajalt.mordant.widgets.Panel
 import com.github.ajalt.mordant.widgets.Text
 import com.pesegato.data.Token
+import com.pesegato.t9stoken.model.SecureToken
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import java.awt.Toolkit
+import java.awt.datatransfer.DataFlavor
+import java.awt.datatransfer.UnsupportedFlavorException
+import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.security.KeyFactory
+import java.security.PrivateKey
+import java.security.spec.EncodedKeySpec
+import java.security.spec.PKCS8EncodedKeySpec
 import java.util.Locale.getDefault
+import javax.crypto.Cipher
 import kotlin.io.encoding.Base64
+import kotlin.jvm.java
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -50,46 +65,61 @@ fun main(args: Array<String>) {
 
     t.println(rgb("#b4eeb4")("You can also use true color and color spaces like HSL"))
 */
-    t.println("Now creating a new token");
-    val color = t.prompt("Choose a color", choices = Token.Color::class.java.enumConstants.map {
-        it.name.lowercase(
-            getDefault()
-        )
-    })
-    //val color = t.prompt("Choose a color", choices = listOf("red", "green", "blue", "white", "gray", "black"))
-    val cText = when (color) {
-        "red" -> red on black
-        "green" -> green on black
-        "blue" -> blue on black
-        "white" -> white on gray
-        "gray" -> gray on black
-        else -> black on white
+
+    val choice=t.prompt("Do you want to decrypt a token or create a token?", choices = listOf("decrypt", "create"))
+    if (choice=="decrypt"){
+        val str=readClipboard()
+        val moshi = Moshi.Builder()
+            .add(KotlinJsonAdapterFactory())
+            .build()
+        val jsonAdapterST = moshi.adapter(SecureToken::class.java)
+        val import = jsonAdapterST.fromJson(str!!)
+        val secret=decr(import!!.secret)
+
+        println("SECRET: $secret")
     }
-    val label = t.prompt("Choose a label")
-    val secret = t.prompt("Now enter the token secret for ${(cText) ("$label")}", hideInput = true)
-    val number = t.prompt("At least 2 token parts will be generated. Enter 0 if ok or any number to add more")?.toIntOrNull()
+    if (choice=="create") {
+        t.println("Now creating a new token");
+        val color = t.prompt("Choose a color", choices = Token.Color::class.java.enumConstants.map {
+            it.name.lowercase(
+                getDefault()
+            )
+        })
+        //val color = t.prompt("Choose a color", choices = listOf("red", "green", "blue", "white", "gray", "black"))
+        val cText = when (color) {
+            "red" -> red on black
+            "green" -> green on black
+            "blue" -> blue on black
+            "white" -> white on gray
+            "gray" -> gray on black
+            else -> black on white
+        }
+        val label = t.prompt("Choose a label")
+        val secret = t.prompt("Now enter the token secret for ${(cText)("$label")}", hideInput = true)
+        val number =
+            t.prompt("At least 2 token parts will be generated. Enter 0 if ok or any number to add more")?.toIntOrNull()
 
-    if ( number == null){
-        t.println("Bad input, quit.")
-        exitProcess(1);
+        if (number == null) {
+            t.println("Bad input, quit.")
+            exitProcess(1);
+        }
+
+        MainJ.buildToken(label, color, secret, number);
+
+        val name = t.prompt("Name of the Device")
+
+        val publicKey = RSACrypt.generateOrGetKeyPair(label)
+
+        val cert = MainJ.getCertificate(name, Base64.encode(publicKey.encoded))
+        //val c64 = Base64.encode(cert)
+        try {
+            MainJ.showQRCodeOnScreenSwing(name, cert)
+        } catch (e: Exception) {
+            println("Headless environment, cannot show QR code on screen, falling back to text")
+            MainJ.showQRCodeOnScreen(cert)
+        }
+        println("Certificate: $cert")
     }
-
-    MainJ.buildToken(label,color,secret, number);
-
-    val name = t.prompt("Name of the Device")
-
-    val publicKey = RSACrypt.generateOrGetKeyPair(label)
-
-    val cert = MainJ.getCertificate(name, Base64.encode(publicKey.encoded))
-    //val c64 = Base64.encode(cert)
-    try {
-        MainJ.showQRCodeOnScreenSwing(name, cert)
-    } catch (e : Exception) {
-        println("Headless environment, cannot show QR code on screen, falling back to text")
-        MainJ.showQRCodeOnScreen(cert)
-    }
-    println("Certificate: $cert")
-
     /**
     val terminal = Terminal()
     val a = terminal.textAnimation<Int> { frame ->
@@ -127,4 +157,76 @@ fun main(args: Array<String>) {
 // animation is rendered before the program exits.
     future.get()
 */
+}
+
+fun readClipboard(): String? {
+    val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+    val contents = clipboard.getContents(null)
+
+    return if (contents?.isDataFlavorSupported(DataFlavor.stringFlavor) == true) {
+        try {
+            val json = contents.getTransferData(DataFlavor.stringFlavor) as? String
+
+            json
+        } catch (e: UnsupportedFlavorException) {
+            println("Clipboard content is not a string: ${e.message}")
+            null
+        } catch (e: IOException) {
+            println("Could not access clipboard: ${e.message}")
+            null
+        }
+    } else {
+        null
+    }
+}
+
+
+fun decr(encrypted: String): String{
+    //val encrypted = "BqCe++3LpUUp0kUr8U8W1oC6bcTR6eAMDZkXlhFJLrV55Tol2hx+RoXNGlhPOZDejrikOZN8bWOvYZ33E8jJZaWKUVp/EFfOiWXK2TA4/7QXYo03esyEX08P13LiI1Sw67H4vD7vKXbbYxYzdxTmJG4l3xMsSx/ozEoepH8REOxK8d4P2EGCECVpbejIugW0/SJVRWlowZtKF7qMlycz1Prux340yGcDx9/K6dTxDTuwdKYgIsfkuoaIjquqnh7g8ouUBr1diDQDkhHX0zn3mYO41Lh6m4ojQ/X71bUq8JnQlJE7ifoI7tYA/mZ2rVGNuTNgGoCH07dFRKyj8cmuUg=="
+
+    val privateKey = RSACrypt.getPrivateKeyPath()
+
+    //read from file
+    val privateKeyFile = File(RSACrypt.getPrivateKeyPath())
+
+    val privateKeyBytes = Files.readAllBytes(privateKeyFile.toPath())
+    val keyFactory = KeyFactory.getInstance("RSA")
+    val privateKeySpec: EncodedKeySpec = PKCS8EncodedKeySpec(privateKeyBytes)
+    val privateKeys = keyFactory.generatePrivate(privateKeySpec)
+    println("LOADED THE KEY")
+
+
+    val decr=decryptDataK(encrypted, privateKeys)
+
+    println("DECRYPTED: $decr"  )
+    return decr
+}
+
+fun decryptDataK(encryptedText: String, privateKey: PrivateKey): String {
+
+    // Initialize the cipher for decryption
+    val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+    cipher.init(Cipher.DECRYPT_MODE, privateKey)
+
+    // Decrypt the encrypted text
+    val decryptedBytes = cipher.doFinal(Base64.decode(encryptedText))
+    return String(decryptedBytes)
+}
+
+fun decryptData(encryptedText: String, privateKeyString: String): String {
+    // Decode the Base64 encoded private key
+    val keyBytes = Base64.decode(privateKeyString)
+    val keySpec = PKCS8EncodedKeySpec(keyBytes)
+
+    // Generate the private key
+    val keyFactory = KeyFactory.getInstance("RSA")
+    val privateKey: PrivateKey = keyFactory.generatePrivate(keySpec)
+
+    // Initialize the cipher for decryption
+    val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+    cipher.init(Cipher.DECRYPT_MODE, privateKey)
+
+    // Decrypt the encrypted text
+    val decryptedBytes = cipher.doFinal(Base64.decode(encryptedText))
+    return String(decryptedBytes)
 }

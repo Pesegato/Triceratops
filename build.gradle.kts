@@ -26,9 +26,8 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.zxing:javase:3.5.3")
     implementation("com.squareup.moshi:moshi:1.15.2")
-    //togliendo queste due sotto si risparmiano 3mb (303 -> 300)
-    //implementation("com.squareup.moshi:moshi-kotlin:1.15.2")
-    //implementation(kotlin("reflect"))
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.2")
+    implementation(kotlin("reflect"))
 // Adds all JVM interface modules
     implementation("com.github.ajalt.mordant:mordant:${mordantVersion}")
 // optional extensions for running animations with coroutines

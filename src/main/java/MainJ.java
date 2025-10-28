@@ -27,7 +27,9 @@ import com.squareup.moshi.Moshi;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -383,6 +385,26 @@ public class MainJ {
         scanIn.close();
 
     }
+
+    public String readClipboard() {
+        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        Transferable contents = clipboard.getContents(null);
+
+        // Check if the clipboard has content and if that content is text
+        if (contents != null && contents.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+            try {
+                // Cast the content to a String and return it
+                return (String) contents.getTransferData(DataFlavor.stringFlavor);
+            } catch (Exception e) {
+                // Handle exceptions, e.g., if the clipboard is in use by another process
+                System.err.println("Could not get clipboard content: " + e.getMessage());
+            }
+        }
+
+        // Return null if the clipboard is empty or doesn't contain text
+        return null;
+    }
+
     private static boolean isDockerEnvironment = false;
 
     public static void setDockerEnvironment(boolean isDocker) {
