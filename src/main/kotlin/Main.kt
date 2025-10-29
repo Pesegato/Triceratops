@@ -56,7 +56,12 @@ fun main(args: Array<String>) {
 
     val onDocker = args.isNotEmpty() && args[0] == "-docker"
     MainJ.setDockerEnvironment(onDocker)
-    t.println("running in docker: $onDocker")
+    val hostHostname = getHostHostname()
+    if (onDocker){
+        t.println("Docker running on host: $hostHostname")
+    } else {
+        t.println("AWT is available")
+    }
     /*
     t.println(red("Hello, world!"), whitespace = Whitespace.NORMAL)
 
@@ -110,7 +115,7 @@ fun main(args: Array<String>) {
 
     }
     else if (choice=="show") {
-        val hostname = getHostname()
+        val hostname = if (onDocker) hostHostname!! else getHostname()
         var name = t.prompt("Name of the Device, enter for "+yellow(hostname))
 
         if (name.isNullOrEmpty()){
@@ -203,6 +208,9 @@ fun getHostname(): String {
     }
 }
 
+fun getHostHostname(): String? {
+    return System.getenv("HOST_HOSTNAME")
+}
 
 fun decr(encrypted: String): String{
     //val encrypted = "BqCe++3LpUUp0kUr8U8W1oC6bcTR6eAMDZkXlhFJLrV55Tol2hx+RoXNGlhPOZDejrikOZN8bWOvYZ33E8jJZaWKUVp/EFfOiWXK2TA4/7QXYo03esyEX08P13LiI1Sw67H4vD7vKXbbYxYzdxTmJG4l3xMsSx/ozEoepH8REOxK8d4P2EGCECVpbejIugW0/SJVRWlowZtKF7qMlycz1Prux340yGcDx9/K6dTxDTuwdKYgIsfkuoaIjquqnh7g8ouUBr1diDQDkhHX0zn3mYO41Lh6m4ojQ/X71bUq8JnQlJE7ifoI7tYA/mZ2rVGNuTNgGoCH07dFRKyj8cmuUg=="
