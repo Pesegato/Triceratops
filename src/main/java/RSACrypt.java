@@ -11,7 +11,7 @@ import java.util.Base64;
 
 public class RSACrypt {
 
-    public static PublicKey generateOrGetKeyPair(String alias) {
+    public static PublicKey generateOrGetKeyPair() {
         PublicKey publicKey;
         try {
             //read from file

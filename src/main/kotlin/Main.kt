@@ -13,6 +13,8 @@ import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.UnsupportedFlavorException
 import java.io.File
 import java.io.IOException
+import java.net.InetAddress
+import java.net.UnknownHostException
 import java.nio.file.Files
 import java.security.KeyFactory
 import java.security.PrivateKey
@@ -66,7 +68,7 @@ fun main(args: Array<String>) {
     t.println(rgb("#b4eeb4")("You can also use true color and color spaces like HSL"))
 */
 
-    val choice=t.prompt("Do you want to decrypt a token or create a token?", choices = listOf("decrypt", "create"))
+    val choice=t.prompt("Please input command", choices = listOf("decrypt", "create", "show"))
     if (choice=="decrypt"){
         val str=readClipboard()
         val moshi = Moshi.Builder()
@@ -78,7 +80,7 @@ fun main(args: Array<String>) {
 
         println("SECRET: $secret")
     }
-    if (choice=="create") {
+    else if (choice=="create") {
         t.println("Now creating a new token");
         val color = t.prompt("Choose a color", choices = Token.Color::class.java.enumConstants.map {
             it.name.lowercase(
@@ -106,9 +108,16 @@ fun main(args: Array<String>) {
 
         MainJ.buildToken(label, color, secret, number);
 
-        val name = t.prompt("Name of the Device")
+    }
+    else if (choice=="show") {
+        val hostname = getHostname()
+        var name = t.prompt("Name of the Device, enter for "+yellow(hostname))
 
-        val publicKey = RSACrypt.generateOrGetKeyPair(label)
+        if (name.isNullOrEmpty()){
+            name = hostname
+        }
+
+        val publicKey = RSACrypt.generateOrGetKeyPair()
 
         val cert = MainJ.getCertificate(name, Base64.encode(publicKey.encoded))
         //val c64 = Base64.encode(cert)
@@ -177,6 +186,20 @@ fun readClipboard(): String? {
         }
     } else {
         null
+    }
+}
+
+/**
+ * Retrieves the hostname of the local machine.
+ *
+ * @return The hostname as a String, or a fallback value like "unknown" if it cannot be determined.
+ */
+fun getHostname(): String {
+    return try {
+        InetAddress.getLocalHost().hostName
+    } catch (e: UnknownHostException) {
+        println("Could not determine hostname: ${e.message}")
+        "unknown" // Fallback value
     }
 }
 
