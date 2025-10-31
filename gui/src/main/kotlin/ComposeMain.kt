@@ -3,6 +3,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -10,11 +12,15 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -104,6 +110,7 @@ fun main() = application {
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun CreateTokenDialog(
     onConfirm: (label: String, secret: String, color: Token.Color) -> Unit,
@@ -113,6 +120,7 @@ fun CreateTokenDialog(
     var secret by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var selectedColor by remember { mutableStateOf(Token.Color.GREEN) }
+    val (labelFocus, secretFocus) = remember { FocusRequester.createRefs() }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(elevation = 8.dp) {
@@ -126,7 +134,13 @@ fun CreateTokenDialog(
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it },
-                    label = { Text("Token Label") }
+                    label = { Text("Token Label") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(
+                        onNext = { secretFocus.requestFocus() }
+                    ),
+                    modifier = Modifier.focusRequester(labelFocus)
                 )
 
                 OutlinedTextField(
@@ -144,7 +158,8 @@ fun CreateTokenDialog(
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(imageVector = image, description)
                         }
-                    }
+                    },
+                    modifier = Modifier.focusRequester(secretFocus)
                 )
 
                 // --- Visual Color Picker ---
@@ -171,6 +186,10 @@ fun CreateTokenDialog(
                 }
             }
         }
+    }
+
+    LaunchedEffect(Unit) {
+        labelFocus.requestFocus()
     }
 }
 
