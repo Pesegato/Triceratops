@@ -7,6 +7,7 @@ plugins {
 dependencies {
     implementation(project(":common"))
     implementation(compose.desktop.currentOs)
+    implementation(compose.materialIconsExtended)
 }
 
 compose.desktop {
