@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -94,10 +95,10 @@ fun main() = application {
                         showCreateTokenDialog = false
                         text = "Token creation cancelled."
                     },
-                    onConfirm = { label, secret, color ->
+                    onConfirm = { label, secret, color, number ->
                         showCreateTokenDialog = false
                         try {
-                            MainJ.buildToken(label, color.name, secret, 0)
+                            MainJ.buildToken(label, color.name, secret, number-2)
                             text = "Successfully created token '$label'! Check your user home folder."
                         } catch (e: Exception) {
                             text = "Error creating token: ${e.message}"
@@ -113,14 +114,17 @@ fun main() = application {
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun CreateTokenDialog(
-    onConfirm: (label: String, secret: String, color: Token.Color) -> Unit,
+    onConfirm: (label: String, secret: String, color: Token.Color, number: Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     var label by remember { mutableStateOf("") }
     var secret by remember { mutableStateOf("") }
+    var numberInput by remember { mutableStateOf("2") }
     var passwordVisible by remember { mutableStateOf(false) }
     var selectedColor by remember { mutableStateOf(Token.Color.GREEN) }
     val (labelFocus, secretFocus) = remember { FocusRequester.createRefs() }
+
+    val isNumberValid = numberInput.toIntOrNull()?.let { it >= 2 } ?: false
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(elevation = 8.dp) {
@@ -162,6 +166,18 @@ fun CreateTokenDialog(
                     modifier = Modifier.focusRequester(secretFocus)
                 )
 
+                OutlinedTextField(
+                    value = numberInput,
+                    onValueChange = { numberInput = it },
+                    label = { Text("Number of Parts") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    isError = !isNumberValid
+                )
+                if (!isNumberValid) {
+                    Text("Must be a number greater than or equal to 2", color = MaterialTheme.colors.error, style = MaterialTheme.typography.caption)
+                }
+
                 // --- Visual Color Picker ---
                 ColorPicker(
                     selectedColor = selectedColor,
@@ -178,9 +194,10 @@ fun CreateTokenDialog(
                         Text("Cancel")
                     }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = {
-                        onConfirm(label, secret, selectedColor)
-                    }) {
+                    Button(
+                        onClick = { onConfirm(label, secret, selectedColor, numberInput.toInt()) },
+                        enabled = isNumberValid && label.isNotBlank() && secret.isNotBlank()
+                    ) {
                         Text("Confirm")
                     }
                 }
