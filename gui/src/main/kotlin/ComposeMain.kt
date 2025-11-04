@@ -28,10 +28,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import com.pesegato.AdbServer
 import com.pesegato.MainJ
 import com.pesegato.RSACrypt
 import com.pesegato.data.QRCoder
 import com.pesegato.data.Token
+import com.pesegato.t9stoken.getHostname
 import com.pesegato.theme.TriceratopsTheme
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
@@ -42,10 +44,23 @@ import kotlin.io.encoding.Base64
 var imageBitmap: ImageBitmap? = null
 
 fun main() = application {
-    Window(onCloseRequest = ::exitApplication, title = "Triceratops Composer") {
-        var text by remember { mutableStateOf("Click a button to start") }
-        var showCreateTokenDialog by remember { mutableStateOf(false) }
+    var text by remember { mutableStateOf("Click a button to start") }
+    var showCreateTokenDialog by remember { mutableStateOf(false) }
+    var isServerRunning by remember { mutableStateOf(false) }
 
+    // --- Server Setup ---
+    val adbServer = remember {
+        AdbServer { receivedData ->
+            // This callback runs on the main UI thread
+            text = receivedData
+            isServerRunning = false // Re-enable the button when the process is done
+        }
+    }
+
+    Window(onCloseRequest = {
+        adbServer.stop()
+        exitApplication()
+    }, title = "Triceratops Composer") {
         TriceratopsTheme {
             Surface(modifier = Modifier.fillMaxSize()) { // This Surface will draw the background
                 Column(
@@ -72,7 +87,7 @@ fun main() = application {
                                 "Clipboard is empty or does not contain text."
                             }
                             val publicKey = RSACrypt.generateOrGetKeyPair()
-                            val cert = MainJ.getCertificate("name", Base64.encode(publicKey.encoded))
+                            val cert = MainJ.getCertificate(getHostname(), Base64.encode(publicKey.encoded))
                             val bufferedImage = QRCoder.showQRCodeOnScreenBI(cert)
                             imageBitmap = bufferedImage?.toComposeImageBitmap()
                         }) {
@@ -83,6 +98,16 @@ fun main() = application {
                             showCreateTokenDialog = true
                         }) {
                             Text("Create New Token")
+                        }
+
+                        Button(
+                            onClick = {
+                                isServerRunning = true
+                                adbServer.start()
+                            },
+                            enabled = !isServerRunning
+                        ) {
+                            Text("Connect to Device")
                         }
                     }
                 }
@@ -98,7 +123,7 @@ fun main() = application {
                     onConfirm = { label, secret, color, number ->
                         showCreateTokenDialog = false
                         try {
-                            MainJ.buildToken(label, color.name, secret, number-2)
+                            MainJ.buildToken(label, color.name, secret, number - 2)
                             text = "Successfully created token '$label'! Check your user home folder."
                         } catch (e: Exception) {
                             text = "Error creating token: ${e.message}"
