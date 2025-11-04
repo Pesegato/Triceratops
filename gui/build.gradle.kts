@@ -8,6 +8,7 @@ dependencies {
     implementation(project(":common"))
     implementation(compose.desktop.currentOs)
     implementation(compose.materialIconsExtended)
+    implementation("com.github.mobile-dev-inc:dadb:1.2.10")
 }
 
 compose.desktop {
