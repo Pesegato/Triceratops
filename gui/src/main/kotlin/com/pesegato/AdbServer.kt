@@ -10,6 +10,7 @@ import java.io.IOException
 import java.io.PrintWriter
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.*
 
 class AdbServer(private val onDataReceived: (String) -> Unit) {
 
@@ -60,7 +61,7 @@ class AdbServer(private val onDataReceived: (String) -> Unit) {
                         val userHome = System.getProperty("user.home")
                         val appDir = File(userHome, ".Triceratops/$device")
                         appDir.mkdirs() // Ensure the directory exists
-                        val outputFile = File(appDir, "received_data.txt")
+                        val outputFile = File(appDir, UUID.randomUUID().toString())
                         outputFile.writeText(response)
                         withContext(Dispatchers.Main) {
                             onDataReceived("Data received and saved to ${outputFile.absolutePath}")
@@ -87,7 +88,7 @@ class AdbServer(private val onDataReceived: (String) -> Unit) {
         try {
             serverSocket?.close()
             dadb?.close()
-        } catch (e: IOException) {
+        } catch (_: IOException) {
             // Log or handle error
         }
     }

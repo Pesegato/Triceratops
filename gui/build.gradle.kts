@@ -6,6 +6,9 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
+    implementation(libs.moshi)
+    implementation(libs.moshi.kotlin)
+    implementation(kotlin("reflect"))
     implementation(compose.desktop.currentOs)
     implementation(compose.materialIconsExtended)
     implementation("com.github.mobile-dev-inc:dadb:1.2.10")

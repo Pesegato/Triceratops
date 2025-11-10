@@ -2,6 +2,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -35,11 +37,25 @@ import com.pesegato.data.QRCoder
 import com.pesegato.data.Token
 import com.pesegato.t9stoken.getHostname
 import com.pesegato.theme.TriceratopsTheme
+import com.pesegato.t9stoken.model.SecureToken
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.UnsupportedFlavorException
+import java.awt.image.BufferedImage
+import java.io.File
 import java.io.IOException
+import javax.imageio.ImageIO
 import kotlin.io.encoding.Base64
+
+// Data class to hold all information for display
+data class DisplayableToken(
+    val uuid: String, // The filename
+    val label: String,
+    val color: Token.Color,
+    val image: ImageBitmap
+)
 
 var imageBitmap: ImageBitmap? = null
 
@@ -47,6 +63,7 @@ fun main() = application {
     var text by remember { mutableStateOf("Click a button to start") }
     var showCreateTokenDialog by remember { mutableStateOf(false) }
     var isServerRunning by remember { mutableStateOf(false) }
+    var tokens by remember { mutableStateOf<List<DisplayableToken>>(emptyList()) }
 
     // --- Server Setup ---
     val adbServer = remember {
@@ -71,10 +88,20 @@ fun main() = application {
                     Text(text)
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Display the image if it exists
-                    imageBitmap?.let {
-                        Image(bitmap = it, contentDescription = "QR Code")
-                        Spacer(modifier = Modifier.height(16.dp))
+                    // Display the list of tokens if it's not empty
+                    if (tokens.isNotEmpty()) {
+                        LazyColumn(modifier = Modifier.weight(1f).padding(16.dp)) {
+                            items(tokens) { token ->
+                                TokenListItem(token)
+                                Divider()
+                            }
+                        }
+                    } else {
+                        // Display the image if it exists and the token list is empty
+                        imageBitmap?.let {
+                            Image(bitmap = it, contentDescription = "QR Code")
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
                     }
 
                     // --- Row of Buttons ---
@@ -87,9 +114,11 @@ fun main() = application {
                                 "Clipboard is empty or does not contain text."
                             }
                             val publicKey = RSACrypt.generateOrGetKeyPair()
+
                             val cert = MainJ.getCertificate(getHostname(), Base64.encode(publicKey.encoded))
                             val bufferedImage = QRCoder.showQRCodeOnScreenBI(cert)
                             imageBitmap = bufferedImage?.toComposeImageBitmap()
+                            tokens = emptyList() // Clear token list when showing QR code
                         }) {
                             Text("Read Clipboard")
                         }
@@ -108,6 +137,44 @@ fun main() = application {
                             enabled = !isServerRunning
                         ) {
                             Text("Connect to Device")
+                        }
+
+                        Button(onClick = {
+                            val tokenFiles = File(MainJ.getPath()).listFiles { _, name -> name.endsWith(".json") } ?: emptyArray()
+                            val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+                            val jsonAdapter = moshi.adapter(SecureToken::class.java)
+
+                            tokens = tokenFiles.mapNotNull { file ->
+                                try {
+                                    val json = file.readText()
+                                    val secureToken = jsonAdapter.fromJson(json)
+                                    if (secureToken != null) {
+                                        val imageName = when (secureToken.color) {
+                                            Token.Color.BLUE -> "t9stokenblue.png"
+                                            Token.Color.GREEN -> "t9stokengreen.png"
+                                            else -> "t9stokenred.png"
+                                        }
+                                        val loadedImage = loadImage(imageName)
+                                        val imageBitmap = loadedImage?.toComposeImageBitmap()
+
+                                        if (imageBitmap != null) {
+                                            DisplayableToken(
+                                                uuid = file.name.removeSuffix(".json"),
+                                                label = secureToken.label,
+                                                color = secureToken.color,
+                                                image = imageBitmap
+                                            )
+                                        } else null
+                                    } else null
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                    null
+                                }
+                            }
+                            imageBitmap = null // Clear the single QR code when showing the list
+                            text = "Showing ${tokens.size} tokens."
+                        }) {
+                            Text("Show Tokens")
                         }
                     }
                 }
@@ -135,6 +202,43 @@ fun main() = application {
         }
     }
 }
+
+@Composable
+fun TokenListItem(token: DisplayableToken) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Image(bitmap = token.image, contentDescription = "Token Image", modifier = Modifier.size(64.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(token.label, style = MaterialTheme.typography.h6)
+            Text(token.uuid, style = MaterialTheme.typography.caption)
+        }
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(tokenColorToComposeColor(token.color))
+        )
+    }
+}
+
+fun loadImage(resourcePath: String): BufferedImage? {
+    val stream = Thread.currentThread().contextClassLoader.getResourceAsStream(resourcePath)
+    return if (stream != null) {
+        try {
+            ImageIO.read(stream)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    } else {
+        println("Image not found: $resourcePath")
+        null
+    }
+}
+
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
