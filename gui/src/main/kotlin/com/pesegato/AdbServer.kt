@@ -17,7 +17,7 @@ class AdbServer(private val onDataReceived: (String) -> Unit) {
     private var dadb: Dadb? = null
     private var serverSocket: ServerSocket? = null
 
-    fun start() {
+    fun receiveToken() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 // 1. Dadb.discover() finds the ADB server automatically
@@ -82,6 +82,10 @@ class AdbServer(private val onDataReceived: (String) -> Unit) {
                 stop()
             }
         }
+    }
+
+    fun sendToken(data: String) {
+        println(data)
     }
 
     fun stop() {

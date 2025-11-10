@@ -92,7 +92,10 @@ fun main() = application {
                     if (tokens.isNotEmpty()) {
                         LazyColumn(modifier = Modifier.weight(1f).padding(16.dp)) {
                             items(tokens) { token ->
-                                TokenListItem(token)
+                                TokenListItem(token) { clickedToken ->
+                                    text = "Simulating send of ${clickedToken.uuid}"
+                                    adbServer.sendToken(File(MainJ.getPath()+clickedToken.uuid+".json").readText())
+                                }
                                 Divider()
                             }
                         }
@@ -132,7 +135,7 @@ fun main() = application {
                         Button(
                             onClick = {
                                 isServerRunning = true
-                                adbServer.start()
+                                adbServer.receiveToken()
                             },
                             enabled = !isServerRunning
                         ) {
@@ -204,9 +207,11 @@ fun main() = application {
 }
 
 @Composable
-fun TokenListItem(token: DisplayableToken) {
+fun TokenListItem(token: DisplayableToken, onTokenClick: (DisplayableToken) -> Unit = {}) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .clickable { onTokenClick(token) },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Image(bitmap = token.image, contentDescription = "Token Image", modifier = Modifier.size(64.dp))
