@@ -7,11 +7,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -48,6 +50,7 @@ import java.io.File
 import java.io.IOException
 import javax.imageio.ImageIO
 import kotlin.io.encoding.Base64
+import kotlinx.coroutines.launch
 
 // Data class to hold all information for display
 data class DisplayableToken(
@@ -57,13 +60,14 @@ data class DisplayableToken(
     val image: ImageBitmap
 )
 
-var imageBitmap: ImageBitmap? = null
-
+@OptIn(ExperimentalMaterial3Api::class)
 fun main() = application {
-    var text by remember { mutableStateOf("Click a button to start") }
+    var text by remember { mutableStateOf("Click 'Connect to Device' to start") }
     var showCreateTokenDialog by remember { mutableStateOf(false) }
     var isServerRunning by remember { mutableStateOf(false) }
     var tokens by remember { mutableStateOf<List<DisplayableToken>>(emptyList()) }
+    var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var selectedTabIndex by remember { mutableStateOf(0) }
 
     // --- Server Setup ---
     val adbServer = remember {
@@ -74,114 +78,132 @@ fun main() = application {
         }
     }
 
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
     Window(onCloseRequest = {
         adbServer.stop()
         exitApplication()
     }, title = "Triceratops Composer") {
         TriceratopsTheme {
-            Surface(modifier = Modifier.fillMaxSize()) { // This Surface will draw the background
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(text)
-                    Spacer(modifier = Modifier.height(16.dp))
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    ModalDrawerSheet {
+                        Column(modifier = Modifier.fillMaxHeight().width(250.dp).padding(16.dp)) {
+                            Text("Actions", style = MaterialTheme.typography.titleLarge)
+                            Spacer(Modifier.height(16.dp))
 
-                    // Display the list of tokens if it's not empty
-                    if (tokens.isNotEmpty()) {
-                        LazyColumn(modifier = Modifier.weight(1f).padding(16.dp)) {
-                            items(tokens) { token ->
-                                TokenListItem(token) { clickedToken ->
-                                    text = "Simulating send of ${clickedToken.uuid}"
-                                    adbServer.sendToken(File(MainJ.getPath()+clickedToken.uuid+".json").readText())
+                            NavigationDrawerItem(
+                                label = { Text("Read Clipboard") },
+                                selected = false,
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    val clipboardContent = readClipboard()
+                                    text = if (clipboardContent != null) {
+                                        "Clipboard: $clipboardContent"
+                                    } else {
+                                        "Clipboard is empty or does not contain text."
+                                    }
+                                    val publicKey = RSACrypt.generateOrGetKeyPair()
+                                    val cert = MainJ.getCertificate(getHostname(), Base64.encode(publicKey.encoded))
+                                    val bufferedImage = QRCoder.showQRCodeOnScreenBI(cert)
+                                    imageBitmap = bufferedImage?.toComposeImageBitmap()
+                                    tokens = emptyList()
+                                    selectedTabIndex = 0 // Switch to the connection tab to show the QR code
                                 }
-                                Divider()
-                            }
-                        }
-                    } else {
-                        // Display the image if it exists and the token list is empty
-                        imageBitmap?.let {
-                            Image(bitmap = it, contentDescription = "QR Code")
-                            Spacer(modifier = Modifier.height(16.dp))
+                            )
+                            NavigationDrawerItem(
+                                label = { Text("Create New Token") },
+                                selected = false,
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    showCreateTokenDialog = true
+                                }
+                            )
                         }
                     }
+                },
+                content = {
+                    Scaffold(
+                        topBar = {
+                            TopAppBar(
+                                title = { Text("Triceratops") },
+                                navigationIcon = {
+                                    IconButton(onClick = { scope.launch { drawerState.apply { if (isClosed) open() else close() } } }) {
+                                        Icon(Icons.Filled.Menu, contentDescription = "Menu")
+                                    }
+                                }
+                            )
+                        },
+                        content = { paddingValues ->
+                            Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+                                val tabs = listOf("Device Connection", "Tokens")
+                                TabRow(selectedTabIndex = selectedTabIndex) {
+                                    tabs.forEachIndexed { index, title ->
+                                        Tab(
+                                            selected = selectedTabIndex == index,
+                                            onClick = {
+                                                selectedTabIndex = index
+                                                if (index == 1) { // "Tokens" tab selected
+                                                    val tokenFiles = File(MainJ.getPath()+"/POCO X6 5G").listFiles { _, name -> name.endsWith(".json") } ?: emptyArray()
+                                                    val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+                                                    val jsonAdapter = moshi.adapter(SecureToken::class.java)
 
-                    // --- Row of Buttons ---
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = {
-                            val clipboardContent = readClipboard()
-                            text = if (clipboardContent != null) {
-                                "Clipboard: $clipboardContent"
-                            } else {
-                                "Clipboard is empty or does not contain text."
-                            }
-                            val publicKey = RSACrypt.generateOrGetKeyPair()
+                                                    tokens = tokenFiles.mapNotNull { file ->
+                                                        try {
+                                                            val json = file.readText()
+                                                            val secureToken = jsonAdapter.fromJson(json)
+                                                            if (secureToken != null) {
+                                                                val imageName = when (secureToken.color) {
+                                                                    Token.Color.BLUE -> "t9stokenblue.png"
+                                                                    Token.Color.GREEN -> "t9stokengreen.png"
+                                                                    else -> "t9stokenred.png"
+                                                                }
+                                                                val loadedImage = loadImage(imageName)
+                                                                val imageBitmap = loadedImage?.toComposeImageBitmap()
 
-                            val cert = MainJ.getCertificate(getHostname(), Base64.encode(publicKey.encoded))
-                            val bufferedImage = QRCoder.showQRCodeOnScreenBI(cert)
-                            imageBitmap = bufferedImage?.toComposeImageBitmap()
-                            tokens = emptyList() // Clear token list when showing QR code
-                        }) {
-                            Text("Read Clipboard")
-                        }
+                                                                if (imageBitmap != null) {
+                                                                    DisplayableToken(
+                                                                        uuid = file.name.removeSuffix(".json"),
+                                                                        label = secureToken.label,
+                                                                        color = secureToken.color,
+                                                                        image = imageBitmap
+                                                                    )
+                                                                } else null
+                                                            } else null
+                                                        } catch (e: Exception) {
+                                                            e.printStackTrace()
+                                                            null
+                                                        }
+                                                    }
+                                                    text = "Showing ${tokens.size} tokens."
+                                                    imageBitmap = null // Clear the single QR code
+                                                }
+                                            },
+                                            text = { Text(title) }
+                                        )
+                                    }
+                                }
 
-                        Button(onClick = {
-                            showCreateTokenDialog = true
-                        }) {
-                            Text("Create New Token")
-                        }
-
-                        Button(
-                            onClick = {
-                                isServerRunning = true
-                                adbServer.receiveToken()
-                            },
-                            enabled = !isServerRunning
-                        ) {
-                            Text("Connect to Device")
-                        }
-
-                        Button(onClick = {
-                            val tokenFiles = File(MainJ.getPath()).listFiles { _, name -> name.endsWith(".json") } ?: emptyArray()
-                            val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-                            val jsonAdapter = moshi.adapter(SecureToken::class.java)
-
-                            tokens = tokenFiles.mapNotNull { file ->
-                                try {
-                                    val json = file.readText()
-                                    val secureToken = jsonAdapter.fromJson(json)
-                                    if (secureToken != null) {
-                                        val imageName = when (secureToken.color) {
-                                            Token.Color.BLUE -> "t9stokenblue.png"
-                                            Token.Color.GREEN -> "t9stokengreen.png"
-                                            else -> "t9stokenred.png"
-                                        }
-                                        val loadedImage = loadImage(imageName)
-                                        val imageBitmap = loadedImage?.toComposeImageBitmap()
-
-                                        if (imageBitmap != null) {
-                                            DisplayableToken(
-                                                uuid = file.name.removeSuffix(".json"),
-                                                label = secureToken.label,
-                                                color = secureToken.color,
-                                                image = imageBitmap
-                                            )
-                                        } else null
-                                    } else null
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                    null
+                                // Content for the selected tab
+                                when (selectedTabIndex) {
+                                    0 -> DeviceConnectionScreen(
+                                        statusText = text,
+                                        isServerRunning = isServerRunning,
+                                        onConnectClick = {
+                                            isServerRunning = true
+                                            adbServer.receiveToken()
+                                        },
+                                        image = imageBitmap
+                                    )
+                                    1 -> TokenListScreen(tokens)
                                 }
                             }
-                            imageBitmap = null // Clear the single QR code when showing the list
-                            text = "Showing ${tokens.size} tokens."
-                        }) {
-                            Text("Show Tokens")
                         }
-                    }
+                    )
                 }
-            }
+            )
 
             // --- Conditionally display the dialog ---
             if (showCreateTokenDialog) {
@@ -207,18 +229,52 @@ fun main() = application {
 }
 
 @Composable
-fun TokenListItem(token: DisplayableToken, onTokenClick: (DisplayableToken) -> Unit = {}) {
+fun DeviceConnectionScreen(statusText: String, isServerRunning: Boolean, onConnectClick: () -> Unit, image: ImageBitmap?) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        image?.let {
+            Image(bitmap = it, contentDescription = "QR Code")
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+        Text(statusText)
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onConnectClick, enabled = !isServerRunning) {
+            Text("Connect to Device")
+        }
+    }
+}
+
+@Composable
+fun TokenListScreen(tokens: List<DisplayableToken>) {
+    if (tokens.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No tokens found.")
+        }
+    } else {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            items(tokens) { token ->
+                TokenListItem(token)
+                HorizontalDivider()
+            }
+        }
+    }
+}
+
+
+@Composable
+fun TokenListItem(token: DisplayableToken) {
     Row(
-        modifier = Modifier.fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .clickable { onTokenClick(token) },
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Image(bitmap = token.image, contentDescription = "Token Image", modifier = Modifier.size(64.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(token.label, style = MaterialTheme.typography.h6)
-            Text(token.uuid, style = MaterialTheme.typography.caption)
+            Text(token.label, style = MaterialTheme.typography.titleLarge)
+            Text(token.uuid, style = MaterialTheme.typography.labelSmall)
         }
         Box(
             modifier = Modifier
@@ -261,13 +317,13 @@ fun CreateTokenDialog(
     val isNumberValid = numberInput.toIntOrNull()?.let { it >= 2 } ?: false
 
     Dialog(onDismissRequest = onDismiss) {
-        Surface(elevation = 8.dp) {
+        Surface(tonalElevation = 8.dp) {
             Column(
                 modifier = Modifier.padding(16.dp).width(300.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Create New Token", style = MaterialTheme.typography.h6)
+                Text("Create New Token", style = MaterialTheme.typography.titleLarge)
 
                 OutlinedTextField(
                     value = label,
@@ -309,7 +365,7 @@ fun CreateTokenDialog(
                     isError = !isNumberValid
                 )
                 if (!isNumberValid) {
-                    Text("Must be a number greater than or equal to 2", color = MaterialTheme.colors.error, style = MaterialTheme.typography.caption)
+                    Text("Must be a number greater than or equal to 2", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                 }
 
                 // --- Visual Color Picker ---
@@ -351,7 +407,7 @@ fun ColorPicker(selectedColor: Token.Color, onColorSelected: (Token.Color) -> Un
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Token.Color.values().forEach { color ->
+        Token.Color.entries.forEach { color ->
             val composeColor = tokenColorToComposeColor(color)
             Box(
                 modifier = Modifier

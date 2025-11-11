@@ -38,8 +38,9 @@ class AdbServer(private val onDataReceived: (String) -> Unit) {
                 //val localPort = serverSocket!!.localPort
                 val devicePort = 7001 // The port the Android app will connect to
 
-                val device = devices.first()
+                //val device = devices.first()
 
+                val device = dadb!!.shell("settings get global device_name").output.trim()
                 // 3. Open a shell stream to the device and execute a command
                 //    This is a simple example. For real data, you'd use `device.open() as in previous attempts`
                 onDataReceived("Device connected: ${device}. Waiting for data...")
