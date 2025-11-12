@@ -38,7 +38,7 @@ class AdbServer(private val onDataReceived: (String) -> Unit) {
                 //val localPort = serverSocket!!.localPort
                 val devicePort = 7001 // The port the Android app will connect to
 
-                //val device = devices.first()
+                val deviceId = devices.first()
 
                 val device = dadb!!.shell("settings get global device_name").output.trim()
                 // 3. Open a shell stream to the device and execute a command
@@ -60,8 +60,12 @@ class AdbServer(private val onDataReceived: (String) -> Unit) {
                     onDataReceived("Received: $response")
                     try {
                         val userHome = System.getProperty("user.home")
-                        val appDir = File(userHome, ".Triceratops/$device")
+                        val appDir = File(userHome, ".Triceratops/tokens/$deviceId")
                         appDir.mkdirs() // Ensure the directory exists
+                        val nameFile = File (appDir, "name")
+                        if (!nameFile.exists() || nameFile.readText() != device) {
+                            nameFile.writeText(device)
+                            }
                         val outputFile = File(appDir, UUID.randomUUID().toString())
                         outputFile.writeText(response)
                         withContext(Dispatchers.Main) {

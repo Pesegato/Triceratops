@@ -29,7 +29,7 @@ fun main() = application {
     var showCreateTokenDialog by remember { mutableStateOf(false) }
     var isServerRunning by remember { mutableStateOf(false) }
     var tokens by remember { mutableStateOf<List<DisplayableToken>>(emptyList()) }
-    var devices by remember { mutableStateOf<List<String>>(emptyList()) }
+    var devices by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var selectedDevice by remember { mutableStateOf<String?>(null) }
     var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var selectedTabIndex by remember { mutableStateOf(0) }
@@ -106,7 +106,19 @@ fun main() = application {
                                                 selectedTabIndex = index
                                                 if (index == 1) { // "Tokens" tab selected
                                                     val tokensDir = File(MainJ.getPath(), "tokens")
-                                                    devices = tokensDir.listFiles { file -> file.isDirectory }?.map { it.name } ?: emptyList()
+                                                    devices = tokensDir.listFiles { file -> file.isDirectory }?.map { deviceDir ->
+                                                        val nameFile = File(deviceDir, "name")
+                                                        println(nameFile)
+                                                        val displayName = if (nameFile.exists()) {
+                                                            nameFile.readText().trim()
+                                                        } else {
+                                                            deviceDir.name // Fallback to the folder name
+                                                        }
+                                                        println(displayName)
+                                                        // Create a Pair: first is the actual folder name, second is the display name
+                                                        Pair(deviceDir.name, displayName)
+                                                    } ?: emptyList()
+
                                                     selectedDevice = null
                                                     tokens = emptyList()
                                                 }
@@ -132,7 +144,7 @@ fun main() = application {
                                             DeviceListScreen(devices) { device ->
                                                 selectedDevice = device
                                                 val deviceDir = File(MainJ.getPath(), "tokens/$device")
-                                                val tokenFiles = deviceDir.listFiles { _, name -> name.endsWith(".json") } ?: emptyArray()
+                                                val tokenFiles = deviceDir.listFiles { _, name -> name.length == 36 } ?: emptyArray()
                                                 val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
                                                 val jsonAdapter = moshi.adapter(SecureToken::class.java)
 
@@ -149,7 +161,7 @@ fun main() = application {
                                                             val loadedImage = loadImage(imageName)
                                                             if (loadedImage != null) {
                                                                 DisplayableToken(
-                                                                    uuid = file.name.removeSuffix(".json"),
+                                                                    uuid = file.name,
                                                                     label = secureToken.label,
                                                                     color = secureToken.color,
                                                                     image = loadedImage.toComposeImageBitmap()
