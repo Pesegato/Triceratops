@@ -30,7 +30,7 @@ fun main() = application {
     var isServerRunning by remember { mutableStateOf(false) }
     var tokens by remember { mutableStateOf<List<DisplayableToken>>(emptyList()) }
     var devices by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-    var selectedDevice by remember { mutableStateOf<String?>(null) }
+    var selectedDevice by remember { mutableStateOf<Pair<String, String>?>(null) }
     var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var selectedTabIndex by remember { mutableStateOf(0) }
 
@@ -46,7 +46,7 @@ fun main() = application {
     val scope = rememberCoroutineScope()
 
     Window(onCloseRequest = {
-        adbServer.stop()
+        adbServer.disconnect()
         exitApplication()
     }, title = "Triceratops Composer") {
         TriceratopsTheme {
@@ -108,17 +108,9 @@ fun main() = application {
                                                     val tokensDir = File(MainJ.getPath(), "tokens")
                                                     devices = tokensDir.listFiles { file -> file.isDirectory }?.map { deviceDir ->
                                                         val nameFile = File(deviceDir, "name")
-                                                        println(nameFile)
-                                                        val displayName = if (nameFile.exists()) {
-                                                            nameFile.readText().trim()
-                                                        } else {
-                                                            deviceDir.name // Fallback to the folder name
-                                                        }
-                                                        println(displayName)
-                                                        // Create a Pair: first is the actual folder name, second is the display name
+                                                        val displayName = if (nameFile.exists()) nameFile.readText().trim() else deviceDir.name
                                                         Pair(deviceDir.name, displayName)
                                                     } ?: emptyList()
-
                                                     selectedDevice = null
                                                     tokens = emptyList()
                                                 }
@@ -135,7 +127,7 @@ fun main() = application {
                                         isServerRunning = isServerRunning,
                                         onConnectClick = {
                                             isServerRunning = true
-                                            adbServer.receiveToken()
+                                            adbServer.connect()
                                         },
                                         image = imageBitmap
                                     )
@@ -143,7 +135,7 @@ fun main() = application {
                                         if (selectedDevice == null) {
                                             DeviceListScreen(devices) { device ->
                                                 selectedDevice = device
-                                                val deviceDir = File(MainJ.getPath(), "tokens/$device")
+                                                val deviceDir = File(MainJ.getPath(), "tokens/${device.first}")
                                                 val tokenFiles = deviceDir.listFiles { _, name -> name.length == 36 } ?: emptyArray()
                                                 val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
                                                 val jsonAdapter = moshi.adapter(SecureToken::class.java)
@@ -151,6 +143,7 @@ fun main() = application {
                                                 tokens = tokenFiles.mapNotNull { file ->
                                                     try {
                                                         val json = file.readText()
+                                                        println("JSON: $json")
                                                         val secureToken = jsonAdapter.fromJson(json)
                                                         if (secureToken != null) {
                                                             val imageName = when (secureToken.color) {
@@ -161,7 +154,7 @@ fun main() = application {
                                                             val loadedImage = loadImage(imageName)
                                                             if (loadedImage != null) {
                                                                 DisplayableToken(
-                                                                    uuid = file.name,
+                                                                    uuid = file.name.removeSuffix(".json"),
                                                                     label = secureToken.label,
                                                                     color = secureToken.color,
                                                                     image = loadedImage.toComposeImageBitmap()
@@ -177,13 +170,14 @@ fun main() = application {
                                         } else {
                                             TokenListScreen(
                                                 tokens = tokens,
-                                                deviceName = selectedDevice!!,
+                                                deviceDisplayName = selectedDevice!!.second,
                                                 onBackClick = {
                                                     selectedDevice = null
                                                     tokens = emptyList()
                                                 },
                                                 onTokenClick = { token ->
                                                     text = "Clicked on token: ${token.label}"
+                                                    adbServer.sendToken(File(MainJ.getPath(), "tokens/${selectedDevice!!.first}/${token.uuid}").readText())
                                                 }
                                             )
                                         }
