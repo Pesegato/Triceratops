@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.io.PrintWriter
+import java.io.BufferedReader
 import java.net.Socket
 import java.util.*
 import kotlin.coroutines.cancellation.CancellationException
@@ -20,6 +21,7 @@ import kotlin.coroutines.cancellation.CancellationException
 sealed class ConnectionState {
     object Disconnected : ConnectionState()
     object Connecting : ConnectionState()
+    object Decrypting : ConnectionState()
     data class Connected(val device: String, val deviceId: Dadb) : ConnectionState()
     data class Error(val message: String) : ConnectionState()
 }
@@ -31,6 +33,10 @@ class AdbServer(private val onStatusUpdate: (String) -> Unit) {
 
     private var dadb: Dadb? = null
     private var listenJob: Job? = null
+    private var portForward: AutoCloseable? = null
+    private var socket: Socket? = null
+    private var socketWriter: PrintWriter? = null
+    private var socketReader: BufferedReader? = null
 
     fun connect() {
         // Prevent trying to connect if we are already connected or connecting
@@ -58,12 +64,25 @@ class AdbServer(private val onStatusUpdate: (String) -> Unit) {
 
                 val device = dadb!!.shell("settings get global device_name").output.trim()
 
+                // 1. Establish port forward for the session
+                val devicePort = 4242
+                portForward = dadb!!.tcpForward(devicePort, devicePort)
+                onStatusUpdate("Port forwarded. Connecting to device...")
+
+                // 2. Create a single, persistent socket connection
+                socket = Socket("localhost", devicePort)
+                socketWriter = PrintWriter(socket!!.getOutputStream(), true)
+                socketReader = socket!!.getInputStream().bufferedReader()
+
                 _state.value = ConnectionState.Connected(device, deviceId)
                 onStatusUpdate("Connected to device: $device")
-                // Start listening for data now that we are connected
+
+                // 3. Start listening for incoming data on the persistent connection
                 listenForData()
 
             } catch (e: Exception) {
+                // Clean up on partial failure
+                disconnect()
                 _state.value = ConnectionState.Error(e.message ?: "An unknown error occurred")
                 onStatusUpdate("Error: ${e.message}")
             }
@@ -71,7 +90,20 @@ class AdbServer(private val onStatusUpdate: (String) -> Unit) {
     }
 
     fun sendToken(data: String){
-        println("Sending data: $data")
+        if (socketWriter == null || _state.value !is ConnectionState.Connected) {
+            onStatusUpdate("Cannot send: Not connected.")
+            return
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            _state.value = ConnectionState.Decrypting
+            onStatusUpdate("Sending: $data")
+            println("Sending: $data")
+            socketWriter?.println(data)
+        }
+    }
+
+    fun decryptToken(data: String){
+        println("Received $data")
     }
 
     private fun listenForData() {
@@ -83,28 +115,24 @@ class AdbServer(private val onStatusUpdate: (String) -> Unit) {
 
         listenJob = Job()
         CoroutineScope(Dispatchers.IO + listenJob!!).launch {
-            val devicePort = 4242 // The port the Android app is listening on
             try {
-                dadb!!.tcpForward(
-                    hostPort = devicePort,
-                    targetPort = devicePort
-                ).use {
-                    onStatusUpdate("Port forwarded. Ready to receive data.")
-                    while (isActive) {
-                        try {
-                            // This will block until a client connects from the device
-                            val socket = Socket("localhost", devicePort)
-                            onStatusUpdate("Device client connected.")
+                onStatusUpdate("Listening for data...")
+                while (isActive) {
+                    // readLine() is a blocking call, but it's in a coroutine.
+                    // It will suspend until a line is received or the socket is closed.
+                    val response = socketReader?.readLine()
+                    if (response == null) {
+                        onStatusUpdate("Device disconnected.")
+                        // Trigger a full disconnect to clean up and reset state
+                        withContext(Dispatchers.Main) { disconnect() }
+                        break // Exit the listening loop
+                    }
+                    withContext(Dispatchers.Main) { onStatusUpdate("Received: $response") }
 
-                            socket.use { clientSocket ->
-                                val input = clientSocket.inputStream.bufferedReader()
-                                val response = input.readLine() // Reads one line of text
-                                if (response == null) {
-                                    onStatusUpdate("Client disconnected.")
-                                    return@use // continue to next iteration of while(isActive)
-                                }
-                                withContext(Dispatchers.Main) { onStatusUpdate("Received: $response") }
-
+                    if (_state.value is ConnectionState.Decrypting){
+                        decryptToken(response)
+                    }
+                    else
                                 try {
                                     val userHome = System.getProperty("user.home")
                                     val appDir = File(userHome, ".Triceratops/tokens/${currentState.deviceId}")
@@ -123,31 +151,42 @@ class AdbServer(private val onStatusUpdate: (String) -> Unit) {
                                         onStatusUpdate("Data received but failed to save to file: ${e.message}")
                                     }
                                 }
-                                val output = PrintWriter(clientSocket.getOutputStream(), true)
+                                val output = PrintWriter(socket!!.getOutputStream(), true)
                                 val message = "SuperJSON"
                                 output.println(message)
                             }
                         } catch (e: IOException) {
                             onStatusUpdate("Client connection error: ${e.message}. Waiting for new connection.")
-                        }
-                    }
-                }
             } catch (e: CancellationException) {
                 onStatusUpdate("Stopped listening for data.")
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { onStatusUpdate("Error during communication: ${e.message}") }
             } finally {
-                onStatusUpdate("Communication channel closed.")
-
+                // If the loop exits, ensure we are fully disconnected.
+                withContext(Dispatchers.Main) { disconnect() }
             }
         }
     }
 
     fun disconnect() {
+        // Check if already disconnected to prevent redundant calls
+        if (_state.value is ConnectionState.Disconnected) return
+
         try {
+            listenJob?.cancel() // Stop the listening coroutine
+            // Close resources in reverse order of creation
+            socketWriter?.close()
+            socketReader?.close()
+            socket?.close()
+            portForward?.close() // Remove the ADB port forward rule
             dadb?.close()
-            listenJob?.cancel()
+
+            // Nullify all resources
             listenJob = null
+            socketWriter = null
+            socketReader = null
+            socket = null
+            portForward = null
             _state.value = ConnectionState.Disconnected
             onStatusUpdate("Disconnected.")
         } catch (e: IOException) {
