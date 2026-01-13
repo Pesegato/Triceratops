@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -18,13 +19,13 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TokenListScreen(tokens: List<DisplayableToken>, deviceName: String, onBackClick: () -> Unit, onTokenClick: (DisplayableToken) -> Unit) {
+fun TokenListScreen(tokens: List<DisplayableToken>, deviceDisplayName: String, onBackClick: () -> Unit, onTokenClick: (DisplayableToken) -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Tokens for $deviceName") },
+            title = { Text("Tokens for $deviceDisplayName") },
             navigationIcon = {
                 IconButton(onClick = onBackClick) {
-                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back to device list")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to device list")
                 }
             }
         )

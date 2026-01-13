@@ -15,17 +15,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun DeviceListScreen(devices: List<Pair<String, String>>, onDeviceClick: (String) -> Unit) {
+fun DeviceListScreen(devices: List<Pair<String, String>>, onDeviceClick: (Pair<String, String>) -> Unit) {
     if (devices.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No device folders found in '.Triceratops/tokens/'.")
         }
     } else {
         LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            items(devices) { (folderName, displayName) -> // Destructure the Pair here
+            items(devices) { devicePair ->
                 ListItem(
-                    headlineContent = { Text(displayName) }, // Show the custom name
-                    modifier = Modifier.clickable { onDeviceClick(folderName) } // Use the folder name for the action
+                    headlineContent = { Text(devicePair.second) }, // Show the display name
+                    modifier = Modifier.clickable { onDeviceClick(devicePair) } // Pass the whole pair on click
                 )
                 HorizontalDivider()
             }
