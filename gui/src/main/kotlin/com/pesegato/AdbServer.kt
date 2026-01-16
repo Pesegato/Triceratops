@@ -141,19 +141,19 @@ class AdbServer(private val onStatusUpdate: (String) -> Unit) {
                                     if (!nameFile.exists() || nameFile.readText() != currentState.device) {
                                         nameFile.writeText(currentState.device)
                                     }
-                                    val outputFile = File(appDir, UUID.randomUUID().toString())
+                                    val uuid = UUID.randomUUID().toString()
+                                    val outputFile = File(appDir, uuid)
                                     outputFile.writeText(response)
                                     withContext(Dispatchers.Main) {
                                         onStatusUpdate("Data received and saved to ${outputFile.absolutePath}")
                                     }
+                                    val output = PrintWriter(socket!!.getOutputStream(), true)
+                                    output.println(uuid)
                                 } catch (e: IOException) {
                                     withContext(Dispatchers.Main) {
                                         onStatusUpdate("Data received but failed to save to file: ${e.message}")
                                     }
                                 }
-                                val output = PrintWriter(socket!!.getOutputStream(), true)
-                                val message = "SuperJSON"
-                                output.println(message)
                             }
                         } catch (e: IOException) {
                             onStatusUpdate("Client connection error: ${e.message}. Waiting for new connection.")
