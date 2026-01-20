@@ -5,6 +5,7 @@ import com.pesegato.data.Token
 data class SecureToken(
     val label: String,
     val color: Token.Color,
+    val location: String,
     val secret: String
 ) {
 /*

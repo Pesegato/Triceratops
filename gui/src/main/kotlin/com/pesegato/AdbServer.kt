@@ -103,7 +103,9 @@ class AdbServer(private val onStatusUpdate: (String) -> Unit) {
     }
 
     fun decryptToken(data: String){
-        println("Received $data")
+        println("Received data")// $data")
+        val secret=RSACrypt.decrypt(data)
+        println("decrypted {$secret}")
     }
 
     private fun listenForData() {
