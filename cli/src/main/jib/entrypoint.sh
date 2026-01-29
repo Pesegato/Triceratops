@@ -39,4 +39,4 @@ pkcs11-tool --module /usr/lib/x86_64-linux-gnu/pkcs11/libtpm2_pkcs11.so \
 
 # 3. Avvio dell'applicazione Java
 echo "☕ Avvio JVM..."
-exec java -Dsun.security.pkcs11.disableKFM=true -cp /app/resources:/app/classes:/app/libs/* MainKt
+exec java -Dsun.security.pkcs11.disableKFM=true -cp /app/resources:/app/classes:/app/libs/* MainKt "$@" --docker
