@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+CONF_DIR="$HOME/.Triceratops"
+CONF_FILE="$CONF_DIR/t9s.properties"
 KEY_NAME="tpm_t9s_pin"
 TMP_PIN_FILE=$(mktemp /dev/shm/tpm_ctx_XXXXXX)
 
@@ -33,50 +35,40 @@ fi
 echo "✅ Hardware TPM rilevato e accessibile."
 
 
-# --- 3. CONTROLLO PRESENZA KEYCTL
-if command -v keyctl >/dev/null 2>&1; then
-    echo "🔎 Keyctl rilevato. Utilizzo del Kernel Keyring..."
-    KEY_ID=$(keyctl search @u user "$KEY_NAME" 2>/dev/null || true)
-
-    if [ -z "$KEY_ID" ]; then
-        echo "🔑 PIN non trovato. Generazione e deposito nel Keyring..."
-        TPM_PIN=$(openssl rand -base64 16)
-        echo -n "$TPM_PIN" | keyctl padd user "$KEY_NAME" @u
-    else
-        echo "🔑 PIN recuperato dal Kernel Keyring (ID: $KEY_ID)"
-        TPM_PIN=$(keyctl pipe "$KEY_ID")
-    fi
+# 1. RILEVAMENTO MODALITÀ
+if [[ " $@ " =~ " --newconf " ]] || [ ! -f "$CONF_FILE" ]; then
+    echo "🏗️  BOOTSTRAP: Preparazione ambiente per configurazione informata..."
+    TPM_PIN="bootstrap_temp_pin"
+    ID_MODE="BOOTSTRAP"
 else
-    # 2. FALLBACK: HARDWARE ID
-    echo "⚠️  Keyctl non installato."
-    echo "❓ Vuoi installarlo ora? (sudo apt install keyutils)"
-    read -p "Schiaccia INVIO per generare un Hardware ID come alternativa, o CTRL+C per fermarti: " confirm
+    # Legge la preferenza salvata
+    ID_MODE=$(grep "tpm.id_mode=" "$CONF_FILE" | cut -d'=' -f2)
+    echo "🛡️  RUNTIME: Modalità $ID_MODE rilevata."
 
-    # Generiamo un PIN basato sul Machine-ID o UUID della scheda madre
-    # Questo garantisce che sulla STESSA macchina il PIN sia coerente
-    HW_ID=$(cat /sys/class/dmi/id/product_uuid 2>/dev/null || cat /etc/machine-id 2>/dev/null || hostname)
-    TPM_PIN=$(echo -n "$HW_ID" | openssl dgst -sha256 -binary | base64 | head -c 16)
-
-    echo "🆔 Hardware ID generato."
+    if [ "$ID_MODE" == "KEYRING" ]; then
+        if command -v keyctl >/dev/null 2>&1; then
+           KEY_ID=$(keyctl search @u user "$KEY_NAME" 2>/dev/null || true)
+           [ -z "$KEY_ID" ] && (TPM_PIN=$(openssl rand -base64 16); echo -n "$TPM_PIN" | keyctl padd user "$KEY_NAME" @u) || TPM_PIN=$(keyctl pipe "$KEY_ID")
+        else
+            echo "⚠️  Keyctl non installato."
+            echo "❓ Vuoi installarlo ora? (sudo apt install keyutils)"
+            exit
+          fi
+    else
+        HW_ID=$(cat /sys/class/dmi/id/product_uuid 2>/dev/null || cat /etc/machine-id 2>/dev/null || hostname)
+        TPM_PIN=$(echo -n "$HW_ID" | openssl dgst -sha256 -binary | base64 | head -c 16)
+    fi
 fi
 
-# 3. SCRITTURA NEL RAM-FILE E LANCIO
 echo -n "$TPM_PIN" > "$TMP_PIN_FILE"
 chmod 400 "$TMP_PIN_FILE"
-mkdir -p ~/.Triceratops
-
-echo "🚀 Avvio Docker..."
 
 docker run --rm -it \
   --device /dev/tpmrm0:/dev/tpmrm0 \
   -v tpm_data:/var/lib/tpm2-pkcs11 \
   -v "$TMP_PIN_FILE":/run/secrets/tpm_pin:ro \
-  -v ~/.Triceratops:/app/output \
+  -v "$CONF_DIR":/app/output \
   --user "$(id -u):$(id -g)" \
   -e HOME=/app/output \
-  -e HOST_HOSTNAME=$(hostname) \
-  triceratops-app "-docker"
-
-# 4. Pulizia finale: Una volta che il container si ferma, rimuove il file RAM
-rm -f "$TMP_PIN_FILE"
-echo "🗑️ File temporaneo rimosso."
+  -e TPM_BOOTSTRAP_MODE=$([ "$ID_MODE" == "BOOTSTRAP" ] && echo "true" || echo "false") \
+  triceratops-app "$@"
