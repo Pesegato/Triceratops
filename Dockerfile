@@ -3,6 +3,7 @@ FROM eclipse-temurin:21-jre-noble AS builder
 
 # Installiamo i tool di compilazione
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
     python3-pip python3-setuptools python3-dev gcc pkg-config libtss2-dev \
     && rm -rf /var/lib/apt/lists/*
 
