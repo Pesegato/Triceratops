@@ -49,7 +49,7 @@ jobs:
       # 2. Build & Push dell'App tramite Jib
       - name: Build and push App with Jib
         run: |
-          ./gradlew jib \
+          ./gradlew :cli:jib \
             -Djib.from.image=${{ env.IMAGE_BASE }}:latest \
             -Djib.to.image=${{ env.IMAGE_APP }} \
             -Djib.to.auth.username=${{ github.actor }} \
