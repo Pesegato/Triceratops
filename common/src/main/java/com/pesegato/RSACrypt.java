@@ -1,137 +1,134 @@
 package com.pesegato;
 
+import com.pesegato.security.KeyProtector;
+
 import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.security.*;
-import java.security.spec.EncodedKeySpec;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 public class RSACrypt {
 
-    public static final String RSA_TRANSFORMATION_STRING = "RSA/ECB/PKCS1Padding";
+    public static final String AES_TRANSFORMATION = "AES/GCM/NoPadding";
+    public static final String TOKEN_LABEL = "T9sToken";
+    private static final int AES_KEY_SIZE = 256; // bit
+    private static final int GCM_IV_LENGTH = 12; // bytes
+    private static final int GCM_TAG_LENGTH = 128; // bit
 
-    public static PublicKey generateOrGetKeyPair() {
-        PublicKey publicKey;
-        try {
-            //read from file
-            File publicKeyFile = new File(getPublicKeyPath());
-            byte[] publicKeyBytes = Base64.getDecoder().decode(Files.readAllBytes(publicKeyFile.toPath()));
-            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-            EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(publicKeyBytes);
-            publicKey = keyFactory.generatePublic(publicKeySpec);
-            System.out.println("LOADED THE KEY");
-            return publicKey;
-        } catch (Exception e) {
-            System.out.println("KEY NOT PRESET");
-        }
-        System.out.println("GENERATING NEW KEYS");
-        try {
-            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-            generator.initialize(2048);
-            KeyPair pair = generator.generateKeyPair();
-            PrivateKey privateKey = pair.getPrivate();
-            publicKey = pair.getPublic();
-            //Storing Keys in Files
-            try (FileOutputStream fos = new FileOutputStream(getPrivateKeyPath())) {
-                fos.write(privateKey.getEncoded());
-            }
-            try (FileOutputStream fos = new FileOutputStream(getPublicKeyPath())) {
-                fos.write(Base64.getEncoder().encode(publicKey.getEncoded()));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            return publicKey;
-        }catch (Exception e){
-            e.printStackTrace();
-            return null;
-        }
-    }
-    public static void test(PublicKey publicKey, PrivateKey privateKey){
-        try{
-            //test string
-            String secretMessage = "Baeldung secret message";
-            Cipher encryptCipher = Cipher.getInstance("RSA");
-            encryptCipher.init(Cipher.ENCRYPT_MODE, publicKey);
-            byte[] secretMessageBytes = secretMessage.getBytes(StandardCharsets.UTF_8);
-            byte[] encryptedMessageBytes = encryptCipher.doFinal(secretMessageBytes);
-            String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessageBytes);
-            System.out.println(encodedMessage);
-            Cipher decryptCipher = Cipher.getInstance("RSA");
-            decryptCipher.init(Cipher.DECRYPT_MODE, privateKey);
-            byte[] decryptedMessageBytes = decryptCipher.doFinal(encryptedMessageBytes);
-            String decryptedMessage = new String(decryptedMessageBytes, StandardCharsets.UTF_8);
-            System.out.println(decryptedMessage);
 
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    private static KeyProtector keyProtector;
+    public RSACrypt(KeyProtector keyProtector) {
+        this.keyProtector = keyProtector;
     }
 
-    public static String decrypt(String secret) {
-        try {
-            // 1. Decode Base64 string to get the serialized payload bytes
-            byte[] payloadBytes = Base64.getDecoder().decode(secret);
+    public PublicKey getPublicKey() throws Exception {
+        return keyProtector.getPublicKey();
+    }
 
-            // 2. Parse the payload (mimic payloadFromByteArray)
+    public void test()throws  Exception{
+        String orig="pippo";
+        System.out.println("Stringa originale "+orig);
+        String crypted=encrypt(orig);
+        System.out.println("Stringa cifrata "+crypted);
+        String plain=decrypt(crypted);
+        System.out.println("Stringa decifrata "+plain);
+
+
+        //keyProtector.test();
+    }
+
+    /**
+     * CIFRATURA IBRIDA:
+     * 1. Genera una chiave AES casuale.
+     * 2. Cifra i dati con AES/GCM.
+     * 3. Cifra la chiave AES con RSA (tramite TPM o KeyProtector).
+     * 4. Impacchetta tutto in un payload Base64.
+     */
+    public String encrypt(String plainText) throws Exception {
+        // 1. Generazione chiave AES temporanea
+        KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+        keyGen.init(AES_KEY_SIZE);
+        SecretKey aesKey = keyGen.generateKey();
+
+        // 2. Generazione IV casuale per GCM
+        byte[] iv = new byte[GCM_IV_LENGTH];
+        new SecureRandom().nextBytes(iv);
+
+        // 3. Cifratura dei dati (AES/GCM)
+        Cipher dataCipher = Cipher.getInstance(AES_TRANSFORMATION);
+        GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+        dataCipher.init(Cipher.ENCRYPT_MODE, aesKey, gcmSpec);
+        byte[] encryptedData = dataCipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
+
+        // 4. Cifratura della chiave AES (RSA)
+        // Passiamo i byte della chiave AES al protector (TPM)
+        byte[] encryptedAesKey = keyProtector.encrypt(aesKey.getEncoded());
+
+        // 5. Impacchettamento Payload: [IV_SIZE][IV][KEY_SIZE][ENC_KEY][DATA]
+        ByteBuffer buffer = ByteBuffer.allocate(
+                4 + iv.length + 4 + encryptedAesKey.length + encryptedData.length
+        );
+        buffer.putInt(iv.length);
+        buffer.put(iv);
+        buffer.putInt(encryptedAesKey.length);
+        buffer.put(encryptedAesKey);
+        buffer.put(encryptedData);
+
+        return Base64.getEncoder().encodeToString(buffer.array());
+    }
+
+    /**
+     * DECIFRATURA IBRIDA:
+     * Percorso inverso utilizzando la logica binaria per il TPM.
+     */
+    public String decrypt(String base64Payload) {
+        try {
+            byte[] payloadBytes = Base64.getDecoder().decode(base64Payload);
             ByteBuffer buffer = ByteBuffer.wrap(payloadBytes);
 
+            // Parsing IV
             int ivSize = buffer.getInt();
             byte[] iv = new byte[ivSize];
             buffer.get(iv);
 
-            int keySize = buffer.getInt();
-            byte[] encryptedAesKey = new byte[keySize];
+            // Parsing Chiave AES cifrata
+            int encryptedKeySize = buffer.getInt();
+            byte[] encryptedAesKey = new byte[encryptedKeySize];
             buffer.get(encryptedAesKey);
 
+            // Parsing Dati
             byte[] encryptedData = new byte[buffer.remaining()];
             buffer.get(encryptedData);
 
-            // 3. Load Private Key
-            File privateKeyFile = new File(getPrivateKeyPath());
-            byte[] privateKeyBytes = Files.readAllBytes(privateKeyFile.toPath());
-            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-            PKCS8EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(privateKeyBytes);
-            PrivateKey privateKey = keyFactory.generatePrivate(privateKeySpec);
+            // Decifratura della chiave AES (RSA via TPM)
+            // Utilizza internamente NoPadding e buffer diretti per stabilità
+            byte[] decryptedAesKeyBytes = keyProtector.decrypt(encryptedAesKey);
+            SecretKey aesKey = new SecretKeySpec(decryptedAesKeyBytes, "AES");
 
-            // 4. Unwrap AES Key
-            Cipher keyUnwrapper = Cipher.getInstance(RSA_TRANSFORMATION_STRING);
-            keyUnwrapper.init(Cipher.UNWRAP_MODE, privateKey);
-            SecretKey aesKey = (SecretKey) keyUnwrapper.unwrap(encryptedAesKey, "AES", Cipher.SECRET_KEY);
-
-            // 5. Decrypt Data
-            Cipher dataCipher = Cipher.getInstance("AES/GCM/NoPadding");
-            GCMParameterSpec gcmSpec = new GCMParameterSpec(128, iv);
+            // Decifratura dei dati (AES/GCM)
+            Cipher dataCipher = Cipher.getInstance(AES_TRANSFORMATION);
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
             dataCipher.init(Cipher.DECRYPT_MODE, aesKey, gcmSpec);
-            byte[] decryptedDataBytes = dataCipher.doFinal(encryptedData);
 
+            byte[] decryptedDataBytes = dataCipher.doFinal(encryptedData);
             return new String(decryptedDataBytes, StandardCharsets.UTF_8);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println("❌ Errore nella decifratura ibrida: " + e.getMessage());
             return null;
         }
     }
 
-    public static String getPrivateKeyPath() {
-        String path=MainJ.getPath()+"keystore/";
-        System.out.println("PATH: "+path);
-        new File(path).mkdirs();
-        return path + "private.key";
-    }
-
-    public static String getPublicKeyPath() {
-        String path=MainJ.getPath()+"keystore/";
-        System.out.println("PATH: "+path);
-        new File(path).mkdirs();
-        return path + "public.key";
+    public static String printHexBinary(byte[] data) {
+        StringBuilder r = new StringBuilder(data.length * 2);
+        for (byte b : data) {
+            r.append(String.format("%02X ", b));
+        }
+        return r.toString().trim();
     }
 }
