@@ -6,7 +6,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip python3-setuptools python3-dev gcc pkg-config libtss2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY tpm2-pkcs11 /opt/tpm2-pkcs11
+#COPY tpm2-pkcs11 /opt/tpm2-pkcs11
+# Invece di COPY, scarichiamo la versione esatta 1.9.2
+WORKDIR /opt
+RUN git clone --depth 1 --branch 1.9.2 https://github.com/tpm2-software/tpm2-pkcs11.git
 WORKDIR /opt/tpm2-pkcs11/tools
 
 # Installiamo tutto dentro la cartella /install (mantenendo la gerarchia /usr/local/...)
