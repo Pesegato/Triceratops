@@ -9,7 +9,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_BASE: ghcr.io/pesegato/triceratops-base
+  IMAGE_APP: ghcr.io/pesegato/triceratops-app
 
 jobs:
   build-and-push:
