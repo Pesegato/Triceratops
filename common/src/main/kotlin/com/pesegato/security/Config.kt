@@ -12,6 +12,8 @@ object Config {
     @JvmStatic
     var isDocker: Boolean = System.getenv("RUNNING_IN_DOCKER") == "true"
     @JvmStatic
+    var hostHostname: String? = System.getenv("HOST_HOSTNAME")
+    @JvmStatic
     var configLoaded: Boolean = false
 
     fun loadFromProperties(props: Properties) {
