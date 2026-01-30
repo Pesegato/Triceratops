@@ -21,22 +21,26 @@ if [ "$COUNTER" != "0x0" ]; then
     tpm2_dictionarylockout --clear-lockout || echo "⚠️ Reset non possibile, attendo timeout."
 fi
 
-echo "🚀 Avvio sistema TPM-Java..."
-
-# 2. Provisioning
-if [ ! -f "$TPM2_PKCS11_STORE/tpm2_pkcs11.sqlite3" ]; then
-    echo "🏗️ Inizializzazione database PKCS11..."
-    # Passiamo il PIN dal segreto allo script di provisioning
-    TPM_PIN=$(cat /run/secrets/tpm_pin)
-    bash /provision_tpm.sh "$TPM_PIN"
-    echo "✅ Provisioning completato."
+if [ "$TPM_BOOTSTRAP_MODE" = "true" ]; then
+    echo "🛠️  BOOTSTRAP MODE: Salto il provisioning automatico per permettere la diagnostica."
 else
-    echo "📦 Database TPM pronto."
+    echo "🛡️  RUNTIME MODE: Avvio provisioning standard..."
+    echo "🚀 Avvio sistema TPM-Java..."
+
+    # 2. Provisioning
+    if [ ! -f "$TPM2_PKCS11_STORE/tpm2_pkcs11.sqlite3" ]; then
+        echo "🏗️ Inizializzazione database PKCS11..."
+        # Passiamo il PIN dal segreto allo script di provisioning
+        TPM_PIN=$(cat /run/secrets/tpm_pin)
+        bash /provision_tpm.sh "$TPM_PIN"
+        echo "✅ Provisioning completato."
+    else
+        echo "📦 Database TPM pronto."
+    fi
+
+    pkcs11-tool --module /usr/lib/x86_64-linux-gnu/pkcs11/libtpm2_pkcs11.so \
+         --read-object --type pubkey --label "T9sToken" > tpm_public_key.der
 fi
-
-pkcs11-tool --module /usr/lib/x86_64-linux-gnu/pkcs11/libtpm2_pkcs11.so \
-    --read-object --type pubkey --label "T9sToken" > tpm_public_key.der
-
 # 3. Avvio dell'applicazione Java
 echo "☕ Avvio JVM..."
 exec java -Dsun.security.pkcs11.disableKFM=true -cp /app/resources:/app/classes:/app/libs/* MainKt "$@" --docker
