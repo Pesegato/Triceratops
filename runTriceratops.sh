@@ -34,6 +34,49 @@ fi
 
 echo "✅ Hardware TPM rilevato e accessibile."
 
+# --- FUNZIONE RESET ---
+reset_tpm() {
+    echo "⚠️  AVVISO: Il reset del TPM cancellerà TUTTE le chiavi gestite da Triceratops."
+    read -p "Sei sicuro di voler procedere? (s/N): " confirm
+    if [[ $confirm == [sS] ]]; then
+        echo "🐳 Lancio mini-container per pulizia hardware..."
+        # Usiamo l'immagine dell'app (che ha i tpm2-tools) per resettare il chip
+        docker run --rm --privileged \
+          --entrypoint "/bin/bash" \
+          --device /dev/tpmrm0:/dev/tpmrm0 \
+          -v tpm_data:/var/lib/tpm2-pkcs11 \
+          triceratops-app "/clean_tpm.sh" "--factory"
+
+        echo "🧹 Rimozione database PKCS11 (Docker Volume)..."
+        # Rimuoviamo il volume docker se esiste, o la cartella locale
+        docker volume rm tpm_data 2>/dev/null || true
+
+        echo "📂 Rimozione configurazione locale..."
+        rm -f "$CONF_FILE"
+
+        if command -v keyctl >/dev/null 2>&1; then
+           echo "🔑 Rimozione PIN dal Kernel Keyring..."
+           KEY_ID=$(keyctl search @u user "$KEY_NAME" 2>/dev/null || true)
+           [ -n "$KEY_ID" ] && keyctl unlink "$KEY_ID" @u
+        fi
+
+        echo "✅ Reset completato. Riavvia senza --resetTPM per riconfigurare."
+        exit 0
+    else
+        echo "Operazione annullata."
+        exit 1
+    fi
+}
+
+# --- 1. CONTROLLO ARGOMENTI ---
+if [[ " $@ " =~ " --resetTPM " ]]; then
+    # Verifica root prima del reset
+    if [ "$EUID" -ne 0 ]; then
+        echo "❌ ERRORE: Il reset richiede privilegi di ROOT (sudo)."
+        exit 1
+    fi
+    reset_tpm
+fi
 
 # 1. RILEVAMENTO MODALITÀ
 if [[ " $@ " =~ " --newconf " ]] || [ ! -f "$CONF_FILE" ]; then
@@ -70,5 +113,6 @@ docker run --rm -it \
   -v "$CONF_DIR":/app/output \
   --user "$(id -u):$(id -g)" \
   -e HOME=/app/output \
+  -e HOST_HOSTNAME=$(hostname) \
   -e TPM_BOOTSTRAP_MODE=$([ "$ID_MODE" == "BOOTSTRAP" ] && echo "true" || echo "false") \
   triceratops-app "$@"
