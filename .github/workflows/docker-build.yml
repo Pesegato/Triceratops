@@ -44,13 +44,13 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ github.repository }}-base:latest
+          tags: ${{ env.IMAGE_BASE }}:latest
 
       # 2. Build & Push dell'App tramite Jib
       - name: Build and push App with Jib
         run: |
           ./gradlew jib \
-            -Djib.from.image=${{ env.REGISTRY }}/${{ github.repository }}-base:latest \
-            -Djib.to.image=${{ env.REGISTRY }}/${{ github.repository }}-app \
+            -Djib.from.image=${{ env.IMAGE_BASE }}:latest \
+            -Djib.to.image=${{ env.IMAGE_APP }} \
             -Djib.to.auth.username=${{ github.actor }} \
             -Djib.to.auth.password=${{ secrets.GITHUB_TOKEN }}
