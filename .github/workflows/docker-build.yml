@@ -51,6 +51,7 @@ jobs:
         run: |
           ./gradlew :cli:jib \
             -Pversion=1.1.0 \
+            -PnativeDistributions.packageVersion=1.1.0 \
             -Djib.from.image=${{ env.IMAGE_BASE }}:latest \
             -Djib.to.image=${{ env.IMAGE_APP }} \
             -Djib.to.auth.username=${{ github.actor }} \
