@@ -23,15 +23,13 @@ compose.desktop {
         nativeDistributions {
             targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
             packageName = "Triceratops"
-            packageVersion = project.version.toString()
+            //packageVersion = project.version.toString()
 // Forza una versione numerica valida per gli standard OS (Debian/MSI/Dmg)
-            /*
             packageVersion = "1.1.0"
 
             linux { debPackageVersion = "1.1.0" }
             windows { msiPackageVersion = "1.1.0" }
             macOS { dmgPackageVersion = "1.1.0" }
-             */
         }
     }
 }
