@@ -9,11 +9,14 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import com.pesegato.AdbServer
+import com.pesegato.AdbConnector
 import com.pesegato.MainJ
 import com.pesegato.RSACrypt
+import com.pesegato.device.DeviceManager
 import com.pesegato.data.QRCoder
 import com.pesegato.gui.*
+import com.pesegato.model.Device
+import com.pesegato.security.SecurityFactory
 import com.pesegato.t9stoken.getHostname
 import com.pesegato.theme.TriceratopsTheme
 import com.pesegato.t9stoken.model.SecureToken
@@ -29,18 +32,24 @@ fun main() = application {
     var showCreateTokenDialog by remember { mutableStateOf(false) }
     var isServerRunning by remember { mutableStateOf(false) }
     var tokens by remember { mutableStateOf<List<DisplayableToken>>(emptyList()) }
-    var devices by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-    var selectedDevice by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var devices by remember { mutableStateOf<List<Device>>(emptyList()) }
+    var selectedDevice by remember { mutableStateOf<Device?>(null) }
     var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var selectedTabIndex by remember { mutableStateOf(0) }
 
+    val kp = SecurityFactory.getProtector()
+    val rsa = RSACrypt(kp);
+
     // --- Server Setup ---
     val adbServer = remember {
-        AdbServer { receivedData ->
+        AdbConnector(rsa) { receivedData ->
             text = receivedData
             isServerRunning = false
         }
     }
+
+    // Istanziamo il nuovo manager
+    val deviceManager = remember { DeviceManager() }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -65,7 +74,7 @@ fun main() = application {
                                     scope.launch { drawerState.close() }
                                     val clipboardContent = readClipboard()
                                     text = if (clipboardContent != null) "Clipboard: $clipboardContent" else "Clipboard is empty or does not contain text."
-                                    val publicKey = RSACrypt.generateOrGetKeyPair()
+                                    val publicKey = kp.publicKey
                                     val cert = MainJ.getCertificate(getHostname(), Base64.encode(publicKey.encoded))
                                     imageBitmap = QRCoder.showQRCodeOnScreenBI(cert)?.toComposeImageBitmap()
                                     tokens = emptyList()
@@ -105,12 +114,7 @@ fun main() = application {
                                             onClick = {
                                                 selectedTabIndex = index
                                                 if (index == 1) { // "Tokens" tab selected
-                                                    val tokensDir = File(MainJ.getPath(), "tokens")
-                                                    devices = tokensDir.listFiles { file -> file.isDirectory }?.map { deviceDir ->
-                                                        val nameFile = File(deviceDir, "name")
-                                                        val displayName = if (nameFile.exists()) nameFile.readText().trim() else deviceDir.name
-                                                        Pair(deviceDir.name, displayName)
-                                                    } ?: emptyList()
+                                                    devices = deviceManager.getAvailableDevices()
                                                     selectedDevice = null
                                                     tokens = emptyList()
                                                 }
@@ -135,7 +139,7 @@ fun main() = application {
                                         if (selectedDevice == null) {
                                             DeviceListScreen(devices) { device ->
                                                 selectedDevice = device
-                                                val deviceDir = File(MainJ.getPath(), "tokens/${device.first}")
+                                                val deviceDir = File(MainJ.getPath(), "tokens/${device.id}")
                                                 val tokenFiles = deviceDir.listFiles { _, name -> name.length == 36 } ?: emptyArray()
                                                 val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
                                                 val jsonAdapter = moshi.adapter(SecureToken::class.java)
@@ -170,14 +174,14 @@ fun main() = application {
                                         } else {
                                             TokenListScreen(
                                                 tokens = tokens,
-                                                deviceDisplayName = selectedDevice!!.second,
+                                                deviceDisplayName = selectedDevice!!.displayName,
                                                 onBackClick = {
                                                     selectedDevice = null
                                                     tokens = emptyList()
                                                 },
                                                 onTokenClick = { token ->
                                                     text = "Clicked on token: ${token.label}"
-                                                    adbServer.sendToken(File(MainJ.getPath(), "tokens/${selectedDevice!!.first}/${token.uuid}").readText())
+                                                    adbServer.sendToken(File(MainJ.getPath(), "tokens/${selectedDevice!!.id}/${token.uuid}").readText())
                                                 }
                                             )
                                         }
