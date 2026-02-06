@@ -1,8 +1,12 @@
 #!/bin/bash
 set -e
 
-CONF_DIR="$HOME/.Triceratops"
-CONF_FILE="$CONF_DIR/t9s.properties"
+REAL_USER=${SUDO_USER:-$USER}
+REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+
+# 2. Definisce il percorso della cartella dati
+HOST_DIR="$REAL_HOME/.Triceratops"
+CONF_FILE="$HOST_DIR/t9s.properties"
 KEY_NAME="tpm_t9s_pin"
 TMP_PIN_FILE=$(mktemp /dev/shm/tpm_ctx_XXXXXX)
 
@@ -33,6 +37,11 @@ if [ ! -e /dev/tpmrm0 ]; then
 fi
 
 echo "✅ Hardware TPM rilevato e accessibile."
+
+if [ ! -d "$HOST_DIR" ]; then
+    mkdir -p "$HOST_DIR"
+    chown "$REAL_USER:$REAL_USER" "$HOST_DIR"
+fi
 
 # --- FUNZIONE RESET ---
 reset_tpm() {
@@ -108,11 +117,13 @@ chmod 400 "$TMP_PIN_FILE"
 
 docker run --rm -it \
   --device /dev/tpmrm0:/dev/tpmrm0 \
+  --network host \
   -v tpm_data:/var/lib/tpm2-pkcs11 \
   -v "$TMP_PIN_FILE":/run/secrets/tpm_pin:ro \
-  -v "$CONF_DIR":/app/output \
+  -v "$HOST_DIR":/app/output \
   --user "$(id -u):$(id -g)" \
   -e HOME=/app/output \
   -e HOST_HOSTNAME=$(hostname) \
+  -e ADB_SERVER_SOCKET=tcp:localhost:5037 \
   -e TPM_BOOTSTRAP_MODE=$([ "$ID_MODE" == "BOOTSTRAP" ] && echo "true" || echo "false") \
-  triceratops-app "$@"
+  ghcr.io/pesegato/triceratops-app "$@"
