@@ -10,12 +10,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
-import java.net.Socket
 import java.util.*
 import kotlin.coroutines.cancellation.CancellationException
 // Defines the possible states of our ADB connection
@@ -64,14 +62,13 @@ class AdbConnector(private val rsa: RSACrypt, private val onStatusUpdate: (Strin
                 val device = dadb!!.shell("settings get global device_name").output.trim()
 
                 println("Connected to device: $device")
-                
+
                 // 1. Open a direct stream to the device (Tunneling)
                 // Questo evita i problemi di port forwarding e socket locali in Docker
                 onStatusUpdate("Opening direct stream to tcp:4242...")
-                val stream = dadb!!.open("tcp:4242")
-                //this.stream = stream
-                socketOutputStream = stream.sink.outputStream()
-                socketInputStream = stream.source.inputStream()
+                stream = dadb!!.open("tcp:4242")
+                socketOutputStream = stream!!.sink.outputStream()
+                socketInputStream = stream!!.source.inputStream()
 
                 _state.value = ConnectionState.Connected(device, deviceId)
                 onStatusUpdate("Connected to device: $device")
@@ -97,7 +94,6 @@ class AdbConnector(private val rsa: RSACrypt, private val onStatusUpdate: (Strin
         CoroutineScope(Dispatchers.IO).launch {
             _state.value = currentState.copy(isDecrypting = true)
             onStatusUpdate("Sending: $data")
-            println("Sending: $data")
             try {
                 // Invio manuale dei byte con newline e flush forzato
                 socketOutputStream?.write((data + "\n").toByteArray(Charsets.UTF_8))
@@ -135,7 +131,6 @@ class AdbConnector(private val rsa: RSACrypt, private val onStatusUpdate: (Strin
                         onStatusUpdate("Device disconnected (EOF). Socket closed by remote peer.")
                         break // Exit the listening loop
                     }
-                    onStatusUpdate("DEBUG: Read $readCount bytes")
                     val rawData = String(buffer, 0, readCount, Charsets.UTF_8)
                     // Gestiamo il caso in cui arrivino più messaggi o manchi il newline
                     val responses = rawData.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
