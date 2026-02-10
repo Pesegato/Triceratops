@@ -4,8 +4,19 @@ import com.github.ajalt.mordant.terminal.Terminal
 import com.github.ajalt.mordant.terminal.prompt
 import com.github.ajalt.mordant.widgets.Panel
 import com.github.ajalt.mordant.widgets.Text
+import com.pesegato.AdbConnector
+import com.pesegato.MainJ
+import com.pesegato.RSACrypt
+import com.pesegato.data.QRCoder
 import com.pesegato.data.Token
+import com.pesegato.device.DeviceManager
+import com.pesegato.security.Config
+import com.pesegato.security.SecurityFactory
+import com.pesegato.security.Setup
+import com.pesegato.t9stoken.getHostname
 import com.pesegato.t9stoken.model.SecureToken
+import com.pesegato.token.TokenManager
+import com.pesegato.web.startWebServer
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import java.awt.Toolkit
@@ -13,20 +24,16 @@ import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.UnsupportedFlavorException
 import java.io.File
 import java.io.IOException
-import java.net.InetAddress
-import java.net.UnknownHostException
-import java.nio.file.Files
 import java.security.KeyFactory
 import java.security.PrivateKey
-import java.security.spec.EncodedKeySpec
 import java.security.spec.PKCS8EncodedKeySpec
+import java.util.Date
 import java.util.Locale.getDefault
 import javax.crypto.Cipher
 import kotlin.io.encoding.Base64
-import kotlin.jvm.java
 import kotlin.system.exitProcess
 
-fun main(args: Array<String>) {
+    fun main(args: Array<String>) {
     /*
     val name = "Kotlin"
     println("Hello, " + name + "!")
@@ -54,14 +61,31 @@ fun main(args: Array<String>) {
         )
     )
 
-    val onDocker = args.isNotEmpty() && args[0] == "-docker"
-    MainJ.setDockerEnvironment(onDocker)
-    val hostHostname = getHostHostname()
-    if (onDocker){
-        t.println("Docker running on host: $hostHostname")
-    } else {
-        t.println("AWT is available")
-    }
+        val setup= Setup()
+        setup.start(args)
+
+        val deviceManager = DeviceManager()
+        val tokenManager = TokenManager()
+        if ("--web" in args) {
+            println("Modalità Web attivata. Avvio del server Ktor in background...")
+            // Avviamo il server in un thread separato per non bloccare la CLI.
+            // startWebSer
+            Thread { startWebServer(deviceManager, tokenManager) }.start()
+        }
+
+
+    val kp = SecurityFactory.getProtector()
+    val rsa = RSACrypt(kp);
+    rsa.test()
+
+        val connector = AdbConnector(rsa) { status ->
+            println(Date().toString() + " [ADB STATUS]: $status")
+        }
+        var running = true
+
+        for (device in deviceManager.getAvailableDevices()){
+            println("- ${device.displayName} (ID: ${device.id})")
+        }
     /*
     t.println(red("Hello, world!"), whitespace = Whitespace.NORMAL)
 
@@ -72,68 +96,176 @@ fun main(args: Array<String>) {
 
     t.println(rgb("#b4eeb4")("You can also use true color and color spaces like HSL"))
 */
+        while (running) {
 
-    val choice=t.prompt("Please input command", choices = listOf("decrypt", "create", "show"))
-    if (choice=="decrypt"){
-        val str=readClipboard()
-        val moshi = Moshi.Builder()
-            .add(KotlinJsonAdapterFactory())
-            .build()
-        val jsonAdapterST = moshi.adapter(SecureToken::class.java)
-        val import = jsonAdapterST.fromJson(str!!)
-        val secret=decr(import!!.secret)
+            val choice =
+                t.prompt("Please input command", choices = listOf("connect", "disconnect", "devices", "tokens", "delete-token", "delete-device", "send", "decrypt", "create", "show", "reset"))
+            when (choice) {
+                "connect" -> connector.connect()
+                "disconnect" -> connector.disconnect()
+                "send" -> {
+                    val deviceId = "89f8d2a8"
+                    val loadedTokens = tokenManager.getTokensForDevice(deviceId)
+                    val tokenUuid = loadedTokens.first().uuid
+                    //if (parts.size > 1) {
+                    connector.sendToken(File(MainJ.getPath(), "tokens/$deviceId/$tokenUuid").readText())
+                    //} else {
+                    //    println("Errore: specifica il testo o token da inviare.")
+                    //}
+                }
+                "devices" -> {
+                    val deviceList = deviceManager.getAvailableDevices()
+                    if (deviceList.isEmpty()) {
+                        println("Nessun dispositivo con token trovato.")
+                    } else {
+                        println("Dispositivi trovati:")
+                        deviceList.forEach { println("- ${it.displayName} (ID: ${it.id})") }
+                    }
+                }
+                "tokens" -> {
+                    //if (parts.size < 2) {
+                    //    println("Errore: specifica l'ID del dispositivo. Es: tokens <device_id>")
+                    //} else {
+                        val deviceId = "89f8d2a8"
+                        val tokenList = tokenManager.getTokensForDevice(deviceId)
+                        if (tokenList.isEmpty()) {
+                            println("Nessun token trovato per il dispositivo con ID: $deviceId")
+                        } else {
+                            println("Token per il dispositivo $deviceId:")
+                            tokenList.forEach { println("- ${it.label} (UUID: ${it.uuid})") }
+                        }
+                    }
+                //}
+                "delete-token" -> {
+                    //if (parts.size < 3) {
+                    //    println("Errore: specifica ID dispositivo e UUID token. Es: delete-token <device_id> <token_uuid>")
+                    //} else {
+                    val deviceId = "89f8d2a8"
+                        val tokenUuid = "89f8d2a8"//token id
+                        if (tokenManager.deleteToken(deviceId, tokenUuid)) {
+                            println("Token $tokenUuid eliminato con successo.")
+                        } else {
+                            println("Errore: impossibile eliminare il token. Controlla gli ID.")
+                        }
+                    }
+                //}
+                "delete-device" -> {
+                    //if (parts.size < 2) {
+                    //    println("Errore: specifica l'ID del dispositivo. Es: delete-device <device_id>")
+                    //} else {
+                        val deviceId = "89f8d2a8"
+                        if (deviceManager.deleteDevice(deviceId)) {
+                            println("Dispositivo $deviceId e tutti i suoi token sono stati eliminati.")
+                        } else {
+                            println("Errore: impossibile eliminare il dispositivo. Controlla l'ID.")
+                        }
+                    }
+                //}
 
-        println("SECRET: $secret")
-    }
-    else if (choice=="create") {
-        t.println("Now creating a new token");
-        val color = t.prompt("Choose a color", choices = Token.Color::class.java.enumConstants.map {
-            it.name.lowercase(
-                getDefault()
-            )
-        })
-        //val color = t.prompt("Choose a color", choices = listOf("red", "green", "blue", "white", "gray", "black"))
-        val cText = when (color) {
-            "red" -> red on black
-            "green" -> green on black
-            "blue" -> blue on black
-            "white" -> white on gray
-            "gray" -> gray on black
-            else -> black on white
+                "exit" -> running = false
+
+
+                "decrypt" -> {
+                    val inputJson: String? // Declare a variable to hold the input
+
+                    if (Config.isDocker) {
+                        t.println(yellow("Please paste the content to decrypt below."))
+                        t.println(gray("(Press Ctrl+D on a new line when you are finished)"))
+                        // Read all text from standard input until the user signals EOF (Ctrl+D)
+                        inputJson = System.`in`.bufferedReader().readText()
+                    } else {
+                        t.println("Reading from system clipboard...")
+                        inputJson = readClipboard()
+                    }
+
+                    if (inputJson.isNullOrBlank()) {
+                        t.println(red("Error: No input data was provided."))
+                        exitProcess(1)
+                    }
+
+                    val moshi = Moshi.Builder()
+                        .add(KotlinJsonAdapterFactory())
+                        .build()
+                    val jsonAdapterST = moshi.adapter(SecureToken::class.java)
+                    val importData = jsonAdapterST.fromJson(inputJson)
+
+                    if (importData == null) {
+                        t.println(red("Error: Could not parse the provided JSON data."))
+                        exitProcess(1)
+                    }
+
+                    //val secret = decr(importData.secret)
+
+                    //println("SECRET: $secret")
+                }
+
+                "create" -> {
+                    t.println("Now creating a new token");
+                    val color = t.prompt("Choose a color", choices = Token.Color::class.java.enumConstants.map {
+                        it.name.lowercase(
+                            getDefault()
+                        )
+                    })
+                    //val color = t.prompt("Choose a color", choices = listOf("red", "green", "blue", "white", "gray", "black"))
+                    val cText = when (color) {
+                        "red" -> red on black
+                        "green" -> green on black
+                        "blue" -> blue on black
+                        "white" -> white on gray
+                        "gray" -> gray on black
+                        else -> black on white
+                    }
+                    val label = t.prompt("Choose a label")
+                    val secret = t.prompt("Now enter the token secret for ${(cText)("$label")}", hideInput = true)
+                    val number =
+                        t.prompt("At least 2 token parts will be generated. Enter 0 if ok or any number to add more")
+                            ?.toIntOrNull()
+
+                    if (number == null) {
+                        t.println("Bad input, quit.")
+                        exitProcess(1);
+                    }
+
+                    MainJ.buildToken(label, color, secret, number);
+
+                }
+
+                "show" -> {
+                    val hostname = if (Config.isDocker) Config.hostHostname!! else getHostname()
+                    var name = t.prompt("Name of the Device, enter for " + yellow(hostname))
+
+                    if (name.isNullOrEmpty()) {
+                        name = hostname
+                    }
+
+                    val publicKey = rsa.publicKey
+
+                    println("--- VERIFICA CHIAVE ---");
+                    println("Provider: " + publicKey.javaClass.getName());
+// Se vedi "sun.security.pkcs11.P11Key$P11PublicKey", è fatta!
+                    println("Algoritmo: " + publicKey.algorithm);
+                    println("Format: " + publicKey.format);
+
+                    rsa.test()
+
+                    val cert = MainJ.getCertificate(name, Base64.encode(publicKey.encoded))
+                    //val c64 = Base64.encode(cert)
+                    try {
+                        QRCoder.showQRCodeOnScreenSwing(name, cert)
+                    } catch (e: Exception) {
+                        println("Headless environment, cannot show QR code on screen, falling back to text")
+                        QRCoder.showQRCodeOnScreen(cert)
+                    }
+                    println("Certificate: $cert")
+                }
+
+                "reset" -> {
+                    println("Launch runTriceratops.sh --resetTPM")
+                }
+            }
+            //connector.disconnect()
+            //println("Disconnected.")
         }
-        val label = t.prompt("Choose a label")
-        val secret = t.prompt("Now enter the token secret for ${(cText)("$label")}", hideInput = true)
-        val number =
-            t.prompt("At least 2 token parts will be generated. Enter 0 if ok or any number to add more")?.toIntOrNull()
-
-        if (number == null) {
-            t.println("Bad input, quit.")
-            exitProcess(1);
-        }
-
-        MainJ.buildToken(label, color, secret, number);
-
-    }
-    else if (choice=="show") {
-        val hostname = if (onDocker) hostHostname!! else getHostname()
-        var name = t.prompt("Name of the Device, enter for "+yellow(hostname))
-
-        if (name.isNullOrEmpty()){
-            name = hostname
-        }
-
-        val publicKey = RSACrypt.generateOrGetKeyPair()
-
-        val cert = MainJ.getCertificate(name, Base64.encode(publicKey.encoded))
-        //val c64 = Base64.encode(cert)
-        try {
-            MainJ.showQRCodeOnScreenSwing(name, cert)
-        } catch (e: Exception) {
-            println("Headless environment, cannot show QR code on screen, falling back to text")
-            MainJ.showQRCodeOnScreen(cert)
-        }
-        println("Certificate: $cert")
-    }
     /**
     val terminal = Terminal()
     val a = terminal.textAnimation<Int> { frame ->
@@ -194,24 +326,8 @@ fun readClipboard(): String? {
     }
 }
 
-/**
- * Retrieves the hostname of the local machine.
- *
- * @return The hostname as a String, or a fallback value like "unknown" if it cannot be determined.
- */
-fun getHostname(): String {
-    return try {
-        InetAddress.getLocalHost().hostName
-    } catch (e: UnknownHostException) {
-        println("Could not determine hostname: ${e.message}")
-        "unknown" // Fallback value
-    }
-}
 
-fun getHostHostname(): String? {
-    return System.getenv("HOST_HOSTNAME")
-}
-
+/*
 fun decr(encrypted: String): String{
     //val encrypted = "BqCe++3LpUUp0kUr8U8W1oC6bcTR6eAMDZkXlhFJLrV55Tol2hx+RoXNGlhPOZDejrikOZN8bWOvYZ33E8jJZaWKUVp/EFfOiWXK2TA4/7QXYo03esyEX08P13LiI1Sw67H4vD7vKXbbYxYzdxTmJG4l3xMsSx/ozEoepH8REOxK8d4P2EGCECVpbejIugW0/SJVRWlowZtKF7qMlycz1Prux340yGcDx9/K6dTxDTuwdKYgIsfkuoaIjquqnh7g8ouUBr1diDQDkhHX0zn3mYO41Lh6m4ojQ/X71bUq8JnQlJE7ifoI7tYA/mZ2rVGNuTNgGoCH07dFRKyj8cmuUg=="
 
@@ -232,6 +348,7 @@ fun decr(encrypted: String): String{
     println("DECRYPTED: $decr"  )
     return decr
 }
+*/
 
 fun decryptDataK(encryptedText: String, privateKey: PrivateKey): String {
 
