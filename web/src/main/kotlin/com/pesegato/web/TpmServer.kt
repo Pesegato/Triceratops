@@ -2,10 +2,14 @@ package com.pesegato.web
 
 import com.pesegato.MainJ
 import com.pesegato.RSACrypt
+import com.pesegato.data.QRCoder
 import com.pesegato.device.DeviceManager
+import com.pesegato.security.Config
 import com.pesegato.security.SecurityFactory
 import com.pesegato.security.TotpUtils
+import com.pesegato.t9stoken.getHostname
 import com.pesegato.token.TokenManager
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
@@ -18,7 +22,10 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
+import java.io.ByteArrayOutputStream
 import java.io.File
+import javax.imageio.ImageIO
+import kotlin.io.encoding.Base64
 
 @Serializable
 data class DeviceDto(val id: String, val displayName: String)
@@ -68,6 +75,40 @@ fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager) {
         routing {
             staticResources("/", "static") {
                 default("index.html")
+            }
+            get("/certificate") {
+                val hostname = Config.hostHostname!!
+
+                val name = hostname
+
+                val publicKey = rsa.publicKey
+
+                println("--- VERIFICA CHIAVE ---");
+                println("Provider: " + publicKey.javaClass.getName());
+// Se vedi "sun.security.pkcs11.P11Key$P11PublicKey", è fatta!
+                println("Algoritmo: " + publicKey.algorithm);
+                println("Format: " + publicKey.format);
+
+                rsa.test()
+
+                val cert = MainJ.getCertificate(name, Base64.encode(publicKey.encoded))
+                //val c64 = Base64.encode(cert)
+                println("Certificate: $cert")
+
+                // 2. Usa il metodo esistente per generare l'immagine in memoria
+                val bufferedImage = QRCoder.showQRCodeOnScreenBI(cert)
+
+                if (bufferedImage != null) {
+                    // 3. Converte il BufferedImage in byte PNG
+                    val outputStream = ByteArrayOutputStream()
+                    ImageIO.write(bufferedImage, "png", outputStream)
+                    val imageBytes = outputStream.toByteArray()
+
+                    // 4. Invia i byte al browser con l'header corretto (image/png)
+                    call.respondBytes(imageBytes, ContentType.Image.PNG)
+                } else {
+                    call.respond(HttpStatusCode.InternalServerError, "Errore nella generazione del QR")
+                }
             }
             get("/devices") {
                 val devices = deviceManager.getAvailableDevices()
