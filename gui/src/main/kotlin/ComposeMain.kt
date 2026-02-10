@@ -18,10 +18,8 @@ import com.pesegato.gui.*
 import com.pesegato.model.Device
 import com.pesegato.security.SecurityFactory
 import com.pesegato.t9stoken.getHostname
+import com.pesegato.token.TokenManager
 import com.pesegato.theme.TriceratopsTheme
-import com.pesegato.t9stoken.model.SecureToken
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import java.io.File
 import kotlin.io.encoding.Base64
 import kotlinx.coroutines.launch
@@ -50,6 +48,7 @@ fun main() = application {
 
     // Istanziamo il nuovo manager
     val deviceManager = remember { DeviceManager() }
+    val tokenManager = remember { TokenManager() }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -139,36 +138,25 @@ fun main() = application {
                                         if (selectedDevice == null) {
                                             DeviceListScreen(devices) { device ->
                                                 selectedDevice = device
-                                                val deviceDir = File(MainJ.getPath(), "tokens/${device.id}")
-                                                val tokenFiles = deviceDir.listFiles { _, name -> name.length == 36 } ?: emptyArray()
-                                                val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-                                                val jsonAdapter = moshi.adapter(SecureToken::class.java)
-
-                                                tokens = tokenFiles.mapNotNull { file ->
-                                                    try {
-                                                        val json = file.readText()
-                                                        println("JSON: $json")
-                                                        val secureToken = jsonAdapter.fromJson(json)
-                                                        if (secureToken != null) {
-                                                            val imageName = when (secureToken.color) {
-                                                                com.pesegato.data.Token.Color.BLUE -> "t9stokenblue.png"
-                                                                com.pesegato.data.Token.Color.GREEN -> "t9stokengreen.png"
-                                                                else -> "t9stokenred.png"
-                                                            }
-                                                            val loadedImage = loadImage(imageName)
-                                                            if (loadedImage != null) {
-                                                                DisplayableToken(
-                                                                    uuid = file.name.removeSuffix(".json"),
-                                                                    label = secureToken.label,
-                                                                    color = secureToken.color,
-                                                                    image = loadedImage.toComposeImageBitmap()
-                                                                )
-                                                            } else null
-                                                        } else null
-                                                    } catch (e: Exception) {
-                                                        e.printStackTrace()
-                                                        null
+                                                // Usiamo il TokenManager per recuperare i dati
+                                                val loadedTokens = tokenManager.getTokensForDevice(device.id)
+                                                
+                                                // Mappiamo i dati di dominio (LoadedToken) in oggetti UI (DisplayableToken)
+                                                tokens = loadedTokens.mapNotNull { token ->
+                                                    val imageName = when (token.color) {
+                                                        com.pesegato.data.Token.Color.BLUE -> "t9stokenblue.png"
+                                                        com.pesegato.data.Token.Color.GREEN -> "t9stokengreen.png"
+                                                        else -> "t9stokenred.png"
                                                     }
+                                                    val loadedImage = loadImage(imageName)
+                                                    if (loadedImage != null) {
+                                                        DisplayableToken(
+                                                            uuid = token.uuid,
+                                                            label = token.label,
+                                                            color = token.color,
+                                                            image = loadedImage.toComposeImageBitmap()
+                                                        )
+                                                    } else null
                                                 }
                                             }
                                         } else {

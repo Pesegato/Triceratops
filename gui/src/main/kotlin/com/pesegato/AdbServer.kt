@@ -1,6 +1,6 @@
 package com.pesegato
 
-import dadb.Dadb
+//import dadb.Dadb
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,15 +19,18 @@ import java.util.*
 import kotlin.coroutines.cancellation.CancellationException
 // Defines the possible states of our ADB connection
 sealed class ConnectionState {
+    /*
     object Disconnected : ConnectionState()
     object Connecting : ConnectionState()
     object Decrypting : ConnectionState()
     data class Connected(val device: String, val deviceId: Dadb) : ConnectionState()
     data class Error(val message: String) : ConnectionState()
+
+     */
 }
 
-class AdbServer(private val onStatusUpdate: (String) -> Unit) {
-
+class AdbServer(private val rsa: RSACrypt, private val onStatusUpdate: (String) -> Unit) {
+/*
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
 
@@ -104,7 +107,7 @@ class AdbServer(private val onStatusUpdate: (String) -> Unit) {
 
     fun decryptToken(data: String){
         println("Received data")// $data")
-        val secret=RSACrypt.decrypt(data)
+        val secret=rsa.decrypt(data, "test")
         println("decrypted {$secret}")
     }
 
@@ -195,4 +198,6 @@ class AdbServer(private val onStatusUpdate: (String) -> Unit) {
             onStatusUpdate("Error during disconnect: ${e.message}")
         }
     }
+
+ */
 }
