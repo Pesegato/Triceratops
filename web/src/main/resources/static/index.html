@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triceratops Web</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background-color: #f4f4f9; color: #333; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .status { margin-top: 20px; padding: 15px; border-radius: 6px; background-color: #e3f2fd; color: #0d47a1; font-weight: bold; }
+        .error { background-color: #ffebee; color: #c62828; }
+        .footer { margin-top: 40px; font-size: 0.9em; color: #777; text-align: center; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🦖 Triceratops Web Interface</h1>
+    <p>Benvenuto nel pannello di controllo del modulo TPM sicuro.</p>
+
+    <div id="statusBox" class="status">
+        Connessione al server in corso...
+    </div>
+
+    <div class="footer">Triceratops Secure Module &bull; Docker Container</div>
+</div>
+
+<script>
+    // Semplice test per verificare che l'API risponda
+    fetch('/devices')
+        .then(res => res.json())
+        .then(data => {
+            const statusBox = document.getElementById('statusBox');
+            statusBox.textContent = `✅ Sistema Online. Dispositivi rilevati: ${data.length}`;
+            statusBox.style.backgroundColor = "#e8f5e9";
+            statusBox.style.color = "#2e7d32";
+        })
+        .catch(err => {
+            const statusBox = document.getElementById('statusBox');
+            statusBox.textContent = '❌ Errore di connessione al server API.';
+            statusBox.className = 'status error';
+            console.error(err);
+        });
+</script>
+</body>
+</html>
