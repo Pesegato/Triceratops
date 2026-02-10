@@ -1,5 +1,6 @@
 package com.pesegato.web
 
+import com.pesegato.MainJ
 import com.pesegato.RSACrypt
 import com.pesegato.device.DeviceManager
 import com.pesegato.security.SecurityFactory
@@ -24,6 +25,9 @@ data class DeviceDto(val id: String, val displayName: String)
 
 @Serializable
 data class TokenDto(val uuid: String, val label: String, val color: String)
+
+@Serializable
+data class WebDecryptRequest(val totp: String)
 
 @Serializable
 data class DecryptRequest(val data: String)
@@ -80,6 +84,31 @@ fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager) {
                 val tokens = tokenManager.getTokensForDevice(deviceId)
                 call.respond(tokens.map { TokenDto(it.uuid, it.label, it.color.name) })
             }
+            post("/devices/{deviceId}/tokens/{tokenUuid}/decrypt") {
+                val deviceId = call.parameters["deviceId"]
+                val tokenUuid = call.parameters["tokenUuid"]
+                if (deviceId == null || tokenUuid == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Missing deviceId or tokenUuid")
+                    return@post
+                }
+
+                try {
+                    val request = call.receive<WebDecryptRequest>()
+                    val tokenFile = File(MainJ.getPath(), "tokens/$deviceId/$tokenUuid")
+                    if (!tokenFile.exists()) {
+                        call.respond(HttpStatusCode.NotFound, "Token not found")
+                        return@post
+                    }
+                    val encryptedContent = tokenFile.readText()
+                    val decrypted = rsa.decrypt(encryptedContent, request.totp)
+
+                    call.respond(DecryptResponse(result = decrypted, error = if (decrypted == null) "Decryption failed (Invalid TOTP?)" else null))
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.InternalServerError, "Error during decryption: ${e.message}")
+                }
+            }
+
+
 
             post("/decrypt") {
                 if (apiKey.isEmpty()) {
