@@ -1,5 +1,9 @@
 [versions]
 kotlin = "2.2.0"
+ktor = "2.3.11"
+logback = "1.5.29"
+coroutines = "1.8.1"
+dadb = "1.2.10"
 jetbrains-compose = "1.6.11"
 palantir-git-version = "4.0.0"
 jib = "3.4.3"
@@ -9,18 +13,32 @@ zxing = "3.5.3"
 moshi = "1.15.2"
 
 [libraries]
+logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 itext-core = { module = "com.itextpdf:itext7-core", version.ref = "itext" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 zxing-javase = { module = "com.google.zxing:javase", version.ref = "zxing" }
+dadb = { module = "dev.mobile:dadb", version.ref = "dadb" }
 moshi = { module = "com.squareup.moshi:moshi", version.ref = "moshi" }
 moshi-kotlin = { module = "com.squareup.moshi:moshi-kotlin", version.ref = "moshi" }
 mordant = { module = "com.github.ajalt.mordant:mordant", version.ref = "mordant" }
 mordant-coroutines = { module = "com.github.ajalt.mordant:mordant-coroutines", version.ref = "mordant" }
 mordant-markdown = { module = "com.github.ajalt.mordant:mordant-markdown", version.ref = "mordant" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+# Ktor Server
+ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
+ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor" }
+ktor-server-contentnegotiation = { module = "io.ktor:ktor-server-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+# Ktor Client
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+ktor-client-contentnegotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-plugin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "jetbrains-compose" }
 palantir-git-version = { id = "com.palantir.git-version", version.ref = "palantir-git-version" }
 jib = { id = "com.google.cloud.tools.jib", version.ref = "jib" }
