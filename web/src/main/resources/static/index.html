@@ -31,12 +31,16 @@
 </head>
 <body>
 <div class="container">
-    <h1>🦖 Triceratops Web Interface</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1>🦖 Triceratops Web Interface</h1>
+        <button id="toggleCertBtn" class="btn">Mostra Certificato</button>
+    </div>
 
     <div id="errorBox" class="error hidden"></div>
 
-    <div id="showCertificate">
-        <img src="/certificate?text=ContenutoDelToken" alt="Certificato" />
+    <div id="showCertificate" class="hidden">
+        <h2 id="certTitle">Certificato per $hostname</h2>
+        <img id="certImage" src="/certificate?from=$client&to=$server" alt="Certificato per $hostname" />
     </div>
 
     <!-- VISTA LISTA DISPOSITIVI -->
@@ -62,6 +66,10 @@
 
 <script>
     const errorBox = document.getElementById('errorBox');
+    const showCertificateDiv = document.getElementById('showCertificate');
+    const certImage = document.getElementById('certImage');
+    const certTitle = document.getElementById('certTitle');
+    const toggleCertBtn = document.getElementById('toggleCertBtn');
     const deviceListView = document.getElementById('deviceListView');
     const tokenListView = document.getElementById('tokenListView');
     const deviceList = document.getElementById('deviceList');
@@ -70,8 +78,26 @@
     const tokenLoading = document.getElementById('tokenLoading');
     const selectedDeviceName = document.getElementById('selectedDeviceName');
     const noTokensMsg = document.getElementById('noTokensMsg');
+    let serverHostname = 'unknown';
          // Avvio
-         loadDevices();
+         initializeApp();
+
+         toggleCertBtn.addEventListener('click', () => {
+             const isHidden = showCertificateDiv.classList.contains('hidden');
+             if (isHidden) {
+                 const clientHostname = window.location.hostname || 'localhost';
+                 if (certImage.src.includes('$client')) {
+                     certImage.src = `/certificate?from=${clientHostname}&to=$server`;
+                     certImage.alt = `Certificato per ${serverHostname}`;
+                 }
+                 certTitle.textContent = `Certificato per ${serverHostname}`;
+                 showCertificateDiv.classList.remove('hidden');
+                 toggleCertBtn.textContent = 'Nascondi Certificato';
+             } else {
+                 showCertificateDiv.classList.add('hidden');
+                 toggleCertBtn.textContent = 'Mostra Certificato';
+             }
+         });
 
          function showError(msg) {
              errorBox.textContent = msg;
@@ -91,6 +117,27 @@
              selectedDeviceName.textContent = `Token di ${device.displayName}`;
              loadTokens(device.id);
          }
+
+          async function initializeApp() {
+             deviceLoading.textContent = 'Inizializzazione del sistema...';
+             try {
+                 const res = await fetch('/status');
+                 if (!res.ok) throw new Error('Il server non risponde.');
+
+                 const status = await res.json();
+                 if (!status.tpmInitialized) {
+                     throw new Error('ERRORE CRITICO: Il modulo TPM non è stato inizializzato sul server.');
+                 }
+
+                 serverHostname = status.hostname;
+                 deviceLoading.textContent = 'Caricamento dispositivi...';
+                 loadDevices();
+
+             } catch (err) {
+                 deviceLoading.classList.add('hidden');
+                 showError(err.message);
+             }
+          }
 
          async function loadDevices() {
              deviceList.innerHTML = '';

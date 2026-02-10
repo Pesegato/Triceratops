@@ -28,6 +28,9 @@ import javax.imageio.ImageIO
 import kotlin.io.encoding.Base64
 
 @Serializable
+data class StatusDto(val hostname: String, val tpmInitialized: Boolean)
+
+@Serializable
 data class DeviceDto(val id: String, val displayName: String)
 
 @Serializable
@@ -45,9 +48,16 @@ data class DecryptResponse(val result: String?, val error: String? = null)
 fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager) {
 
     // 1. Inizializzazione TPM
-    val kp = SecurityFactory.getProtector()
-    val rsa = RSACrypt(kp)
-    println("✅ TPM inizializzato.")
+    var tpmInitialized = false
+    lateinit var rsa: RSACrypt
+    try {
+        val kp = SecurityFactory.getProtector()
+        rsa = RSACrypt(kp)
+        tpmInitialized = true
+        println("✅ TPM inizializzato.")
+    } catch (e: Exception) {
+        println("❌ ERRORE: Impossibile inizializzare il TPM. ${e.message}")
+    }
 
     // 2. Lettura API Key condivisa
     val apiKeyFile = File("/app/output/api.key")
@@ -75,6 +85,9 @@ fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager) {
         routing {
             staticResources("/", "static") {
                 default("index.html")
+            }
+            get("/status") {
+                call.respond(StatusDto(hostname = Config.hostHostname!!, tpmInitialized = tpmInitialized))
             }
             get("/certificate") {
                 val hostname = Config.hostHostname!!
