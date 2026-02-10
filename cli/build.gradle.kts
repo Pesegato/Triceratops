@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
+    implementation(project(":web"))
     implementation(libs.moshi)
     implementation(libs.moshi.kotlin)
     implementation(kotlin("reflect"))
@@ -23,7 +24,9 @@ jib {
         image = "docker://triceratops-base:latest"
     }
     to {
-        image = "triceratops-app"
+        //image = "triceratops-app"
+        image = "ghcr.io/pesegato/triceratops-app"
+        tags = setOf("latest", "${project.version}")
     }
 
     container {
