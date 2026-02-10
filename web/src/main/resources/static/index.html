@@ -166,30 +166,59 @@
                  showError("Errore nel recupero dei token.");
              }
          }
-          async function handleDecryptClick(deviceId, tokenUuid) {
-             const totp = prompt("Inserisci il codice TOTP per autorizzare la decifrazione:");
-             if (!totp) return;
+async function handleDecryptClick(deviceId, tokenUuid) {
+    const totp = prompt("Inserisci il codice TOTP:");
+    if (!totp) return;
 
-             try {
-                 const res = await fetch(`/devices/${deviceId}/tokens/${tokenUuid}/decrypt`, {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ totp: totp })
-                 });
+    try {
+        // 1. Genera coppia di chiavi RSA-OAEP nel browser
+        const keyPair = await window.crypto.subtle.generateKey(
+            {
+                name: "RSA-OAEP",
+                modulusLength: 2048,
+                publicExponent: new Uint8Array([1, 0, 1]),
+                hash: "SHA-256"
+            },
+            true,
+            ["encrypt", "decrypt"]
+        );
 
-                 const responseData = await res.json();
+        // 2. Esporta la chiave pubblica per inviarla al server
+        const exportedKey = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
+        const publicKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedKey)));
 
-                 if (!res.ok || responseData.error) {
-                     throw new Error(responseData.error || 'Decifrazione fallita.');
-                 }
+        // 3. Invia richiesta con TOTP e Chiave Pubblica
+        const res = await fetch(`/devices/${deviceId}/tokens/${tokenUuid}/decrypt`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                totp: totp,
+                clientPublicKey: publicKeyBase64
+            })
+        });
 
-                 alert(`Risultato:\n\n${responseData.result}`);
+        const responseData = await res.json();
+        if (!res.ok || responseData.error) throw new Error(responseData.error);
 
-             } catch (err) {
-                 console.error(err);
-                 showError(err.message);
-             }
-         }
+        // 4. Decifra la risposta usando la Chiave Privata (che non ha mai lasciato il browser)
+        const encryptedBytes = Uint8Array.from(atob(responseData.encryptedResult), c => c.charCodeAt(0));
+        const decryptedBuffer = await window.crypto.subtle.decrypt(
+            { name: "RSA-OAEP" },
+            keyPair.privateKey,
+            encryptedBytes
+        );
+
+        const secret = new TextDecoder().decode(decryptedBuffer);
+
+        // 5. Copia negli appunti invece di mostrare a video (più sicuro)
+        await navigator.clipboard.writeText(secret);
+        alert("Segreto decifrato e copiato negli appunti!");
+
+    } catch (err) {
+        console.error(err);
+        showError(err.message);
+    }
+}
 </script>
 </body>
 </html>
