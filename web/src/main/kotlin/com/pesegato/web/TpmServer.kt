@@ -1,5 +1,6 @@
 package com.pesegato.web
 
+import com.pesegato.AdbConnector
 import com.pesegato.MainJ
 import com.pesegato.RSACrypt
 import com.pesegato.data.QRCoder
@@ -45,7 +46,7 @@ data class DecryptRequest(val data: String)
 @Serializable
 data class DecryptResponse(val result: String?, val error: String? = null)
 
-fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager) {
+fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager, connector: AdbConnector) {
 
     // 1. Inizializzazione TPM
     var tpmInitialized = false
@@ -57,25 +58,6 @@ fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager) {
         println("✅ TPM inizializzato.")
     } catch (e: Exception) {
         println("❌ ERRORE: Impossibile inizializzare il TPM. ${e.message}")
-    }
-
-    // 2. Lettura API Key condivisa
-    val apiKeyFile = File("/app/output/api.key")
-    var apiKey = ""
-
-    // Semplice meccanismo di attesa se la GUI è lenta a scrivere il file
-    var attempts = 0
-    while (!apiKeyFile.exists() && attempts < 10) {
-        println("⏳ In attesa del file api.key...")
-        Thread.sleep(1000)
-        attempts++
-    }
-
-    if (apiKeyFile.exists()) {
-        apiKey = apiKeyFile.readText().trim()
-        println("🔒 API Key caricata.")
-    } else {
-        println("⚠️  API Key non trovata! Il server rifiuterà tutte le richieste.")
     }
 
     embeddedServer(Netty, port = 8080, host = "127.0.0.1") {
@@ -138,7 +120,19 @@ fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager) {
                 val tokens = tokenManager.getTokensForDevice(deviceId)
                 call.respond(tokens.map { TokenDto(it.uuid, it.label, it.color.name) })
             }
+
+            post("/devices/{deviceId}/connect") {
+                val deviceId = call.parameters["deviceId"]
+                if (deviceId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Missing deviceId")
+                    return@post
+                }
+                connector.connect()
+                call.respond(HttpStatusCode.OK, "Device connected")
+            }
+
             post("/devices/{deviceId}/tokens/{tokenUuid}/decrypt") {
+                println("Sono qui!")
                 val deviceId = call.parameters["deviceId"]
                 val tokenUuid = call.parameters["tokenUuid"]
                 if (deviceId == null || tokenUuid == null) {
@@ -154,7 +148,8 @@ fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager) {
                         return@post
                     }
                     val encryptedContent = tokenFile.readText()
-                    val decrypted = rsa.decrypt(encryptedContent, request.totp)
+                    println("Token da mandare: $encryptedContent")
+                    val decrypted = rsa.decrypt(encryptedContent)
 
                     call.respond(DecryptResponse(result = decrypted, error = if (decrypted == null) "Decryption failed (Invalid TOTP?)" else null))
                 } catch (e: Exception) {
@@ -165,22 +160,16 @@ fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager) {
 
 
             post("/decrypt") {
-                if (apiKey.isEmpty()) {
+                val pin="123456"
+                if (pin.isEmpty()) {
                     call.respond(HttpStatusCode.Unauthorized, "Server not initialized with API Key")
-                    return@post
-                }
-
-                val authHeader = call.request.header("Authorization")
-                if (authHeader != "Bearer $apiKey") {
-                    call.respond(HttpStatusCode.Unauthorized, "Invalid API Key")
                     return@post
                 }
 
                 val request = call.receive<DecryptRequest>()
 
                 // Calcoliamo il TOTP corrente come AAD per validare la richiesta
-                val totp = TotpUtils.generateCurrentCode(apiKey)
-                val decrypted = rsa.decrypt(request.data, totp)
+                val decrypted = rsa.decrypt(request.data)
 
                 if (decrypted != null) {
                     call.respond(DecryptResponse(result = decrypted))

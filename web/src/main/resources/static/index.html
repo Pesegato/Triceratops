@@ -11,7 +11,7 @@
         h2 { color: #34495e; margin-top: 0; }
 
         .card-list { list-style: none; padding: 0; }
-        .card { padding: 15px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: background 0.2s, transform 0.1s; display: flex; justify-content: space-between; align-items: center; }
+        .card { padding: 15px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 10px; transition: background 0.2s, transform 0.1s; display: flex; justify-content: space-between; align-items: center; }
         .card:hover { background-color: #f9f9f9; transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .card-title { font-weight: bold; font-size: 1.1em; }
         .card-subtitle { color: #777; font-size: 0.9em; }
@@ -21,6 +21,11 @@
         .token-color { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; }
 
         .btn { padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
+        .btn-secondary { background-color: #7f8c8d; }
+        .btn-secondary:hover { background-color: #95a5a6; }
+
+        .card-actions { display: flex; gap: 10px; }
+        .card-content { cursor: pointer; flex-grow: 1; }
         .btn:hover { background-color: #2980b9; }
 
         .hidden { display: none; }
@@ -158,13 +163,14 @@
                      const li = document.createElement('li');
                      li.className = 'card';
                      li.innerHTML = `
-                         <div>
+                         <div class="card-content" onclick="showTokenList({id: '${device.id}', displayName: '${device.displayName}'})">
                              <div class="card-title">${device.displayName}</div>
                              <div class="card-subtitle">ID: ${device.id}</div>
                          </div>
-                         <div style="color: #3498db;">➔</div>
+                         <div class="card-actions">
+                            <button class="btn btn-secondary" onclick="handleConnectClick('${device.id}', event)">Connect</button>
+                         </div>
                      `;
-                     li.onclick = () => showTokenList(device);
                      deviceList.appendChild(li);
                  });
              } catch (err) {
@@ -217,6 +223,26 @@
                  showError("Errore nel recupero dei token.");
              }
          }
+
+        async function handleConnectClick(deviceId, event) {
+            event.stopPropagation(); // Evita di triggerare l'onclick per mostrare i token
+            try {
+                const res = await fetch(`/devices/${deviceId}/connect`, {
+                    method: 'POST'
+                });
+
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    throw new Error(errorText || `Connessione al dispositivo ${deviceId} fallita.`);
+                }
+
+                alert(`Connessione al dispositivo ${deviceId} avviata con successo.`);
+
+            } catch (err) {
+                console.error(err);
+                showError(err.message);
+            }
+        }
 async function handleDecryptClick(deviceId, tokenUuid) {
     const totp = prompt("Inserisci il codice TOTP:");
     if (!totp) return;
