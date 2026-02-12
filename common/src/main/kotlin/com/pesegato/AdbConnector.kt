@@ -2,6 +2,7 @@ package com.pesegato
 
 import dadb.AdbStream
 import dadb.Dadb
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -106,10 +107,17 @@ class AdbConnector(private val rsa: RSACrypt, private val onStatusUpdate: (Strin
         }
     }
 
+    var waitBox: CompletableDeferred<String>? = null
+
+    fun waitForResponse(responseBox: CompletableDeferred<String>) {
+        waitBox=responseBox
+    }
+
     fun decryptToken(data: String){
         onStatusUpdate("Received encrypted data")
         val secret=rsa.decrypt(data)
         onStatusUpdate("Decrypted: $secret")
+        waitBox?.complete(secret)
     }
 
     private fun listenForData() {
