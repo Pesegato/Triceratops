@@ -213,7 +213,7 @@
                                  <div class="card-subtitle">${token.uuid}</div>
                              </div>
                          </div>
-                         <button class="btn" onclick="handleDecryptClick('${deviceId}', '${token.uuid}')">Decifra</button>
+                         <button class="btn" onclick="handleDecryptClick(this, '${deviceId}', '${token.uuid}')">Decifra</button>
                      `;
                      tokenList.appendChild(li);
                  });
@@ -243,9 +243,13 @@
                 showError(err.message);
             }
         }
-async function handleDecryptClick(deviceId, tokenUuid) {
+async function handleDecryptClick(btn, deviceId, tokenUuid) {
     const totp = prompt("Inserisci il codice TOTP:");
     if (!totp) return;
+
+    const originalText = btn.textContent;
+    btn.textContent = "Decifrazione...";
+    btn.disabled = true;
 
     try {
         // 1. Genera coppia di chiavi RSA-OAEP nel browser
@@ -287,13 +291,26 @@ async function handleDecryptClick(deviceId, tokenUuid) {
 
         const secret = new TextDecoder().decode(decryptedBuffer);
 
-        // 5. Copia negli appunti invece di mostrare a video (più sicuro)
-        await navigator.clipboard.writeText(secret);
-        alert("Segreto decifrato e copiato negli appunti!");
+        // 5. Richiedi click esplicito per copiare (risolve "lack of user activation")
+        btn.textContent = "Copia Segreto";
+        btn.disabled = false;
+        btn.style.backgroundColor = "#2ecc71";
+
+        btn.onclick = async (e) => {
+            e.stopPropagation();
+            await navigator.clipboard.writeText(secret);
+            alert("Copiato negli appunti!");
+            // Reset del bottone
+            btn.textContent = originalText;
+            btn.style.backgroundColor = "";
+            btn.onclick = () => handleDecryptClick(btn, deviceId, tokenUuid);
+        };
 
     } catch (err) {
         console.error(err);
         showError(err.message);
+        btn.textContent = originalText;
+        btn.disabled = false;
     }
 }
 </script>
