@@ -34,6 +34,7 @@
         .error { color: #c0392b; padding: 10px; background: #fadbd8; border-radius: 4px; margin-bottom: 15px; }
         .loading { color: #7f8c8d; font-style: italic; }
         .footer { margin-top: 40px; font-size: 0.8em; color: #aaa; text-align: center; }
+        .status-box { background-color: #e8f6f3; border: 1px solid #d4efdf; color: #1e8449; padding: 10px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9em; }
     </style>
 </head>
 <body>
@@ -44,6 +45,10 @@
     </div>
 
     <div id="errorBox" class="error hidden"></div>
+
+    <div id="connectionStatusBox" class="status-box">
+        <strong>Connection Status:</strong> <span id="connectionStatusText">Checking...</span>
+    </div>
 
     <div id="showCertificate" class="hidden">
         <h2 id="certTitle">Certificato per $hostname</h2>
@@ -73,6 +78,7 @@
 
 <script>
     const errorBox = document.getElementById('errorBox');
+    const connectionStatusText = document.getElementById('connectionStatusText');
     const showCertificateDiv = document.getElementById('showCertificate');
     const certImage = document.getElementById('certImage');
     const certTitle = document.getElementById('certTitle');
@@ -88,6 +94,7 @@
     let serverHostname = 'unknown';
          // Avvio
          initializeApp();
+         startConnectionStatusPolling();
 
          toggleCertBtn.addEventListener('click', () => {
              const isHidden = showCertificateDiv.classList.contains('hidden');
@@ -105,6 +112,20 @@
                  toggleCertBtn.textContent = 'Mostra Certificato';
              }
          });
+
+         function startConnectionStatusPolling() {
+             setInterval(async () => {
+                 try {
+                     const res = await fetch('/connectionStatus');
+                     if (res.ok) {
+                         const status = await res.text();
+                         connectionStatusText.textContent = status;
+                     }
+                 } catch (e) {
+                     console.error("Error polling connection status", e);
+                 }
+             }, 2000);
+         }
 
          function showError(msg) {
              errorBox.textContent = msg;
