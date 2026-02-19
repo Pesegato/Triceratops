@@ -23,6 +23,8 @@
         .btn { padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
         .btn-secondary { background-color: #7f8c8d; }
         .btn-secondary:hover { background-color: #95a5a6; }
+        .btn-danger { background-color: #e74c3c; }
+        .btn-danger:hover { background-color: #c0392b; }
 
         .card-actions { display: flex; gap: 10px; }
         .card-content { cursor: pointer; flex-grow: 1; }
@@ -213,7 +215,10 @@
                                  <div class="card-subtitle">${token.uuid}</div>
                              </div>
                          </div>
-                         <button class="btn" onclick="handleDecryptClick(this, '${deviceId}', '${token.uuid}')">Decifra</button>
+                         <div class="card-actions">
+                             <button class="btn" onclick="handleDecryptClick(this, '${deviceId}', '${token.uuid}')">Decifra</button>
+                             <button class="btn btn-danger" onclick="handleDeleteClick('${deviceId}', '${token.uuid}')">Elimina</button>
+                         </div>
                      `;
                      tokenList.appendChild(li);
                  });
@@ -238,6 +243,23 @@
 
                 alert(`Connessione al dispositivo ${deviceId} avviata con successo.`);
 
+            } catch (err) {
+                console.error(err);
+                showError(err.message);
+            }
+        }
+
+        async function handleDeleteClick(deviceId, tokenUuid) {
+            if (!confirm("Sei sicuro di voler eliminare questo token?")) return;
+
+            try {
+                const res = await fetch(`/devices/${deviceId}/tokens/${tokenUuid}/delete`, {
+                    method: 'POST'
+                });
+
+                if (!res.ok) throw new Error('Errore durante l\'eliminazione del token.');
+
+                loadTokens(deviceId);
             } catch (err) {
                 console.error(err);
                 showError(err.message);
