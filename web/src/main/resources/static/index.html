@@ -54,7 +54,10 @@
     <div id="keyCeremonyBox" class="status-box">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="flex-grow: 1;"><strong>Key Ceremony:</strong> <div id="capabilitiesContainer">Checking...</div></div>
-            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8em;" onclick="handleProvisionClick()">Provision</button>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8em;" onclick="handleProvisionClick()">Provision</button>
+                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8em;" onclick="handleClearTpmClick()">Clear TPM data</button>
+            </div>
         </div>
     </div>
 
@@ -214,6 +217,23 @@
                  }
              } catch (e) {
                  alert("Errore richiesta: " + e.message);
+             }
+         }
+
+         async function handleClearTpmClick() {
+             if (!confirm("ATTENZIONE: Questa operazione cancellerà TUTTI i dati nel TPM. I token esistenti non potranno più essere decifrati.\n\nSei sicuro di voler procedere?")) return;
+
+             try {
+                 const res = await fetch('/cleartpmdata', { method: 'POST' });
+                 if (res.ok) {
+                    const message = await res.text();
+                    alert(message);
+                 } else {
+                     const err = await res.text();
+                     alert("Errore durante la cancellazione: " + err);
+                 }
+             } catch (e) {
+                 alert("Errore di connessione: " + e.message);
              }
          }
 

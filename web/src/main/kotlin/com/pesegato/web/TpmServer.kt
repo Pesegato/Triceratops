@@ -29,6 +29,7 @@ import javax.crypto.spec.OAEPParameterSpec
 import javax.crypto.spec.PSource
 import javax.imageio.ImageIO
 import kotlin.io.encoding.Base64
+import kotlin.system.exitProcess
 
 @Serializable
 data class StatusDto(val hostname: String, val tpmInitialized: Boolean)
@@ -129,7 +130,18 @@ fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager, con
                 call.respond(capabilities)
             }
 
-            get("/provision"){
+            post("/cleartpmdata"){
+                val cmd=arrayOf("/clean_tpm.sh","--factory")
+                val process = Runtime.getRuntime().exec(cmd)
+                process.waitFor()
+                call.respond(HttpStatusCode.OK, "TPM cleared. Shutting down.")
+                Thread {
+                    Thread.sleep(1000)
+                    exitProcess(0)
+                }.start()
+            }
+
+            post("/provision"){
                 call.respond("TBD")
             }
 
