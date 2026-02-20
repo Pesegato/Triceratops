@@ -6,6 +6,7 @@ import com.pesegato.RSACrypt
 import com.pesegato.data.QRCoder
 import com.pesegato.device.DeviceManager
 import com.pesegato.security.Config
+import com.pesegato.security.ProvisionUtils
 import com.pesegato.security.SecurityFactory
 import com.pesegato.security.TotpUtils.encryptMessage
 import com.pesegato.token.TokenManager
@@ -119,6 +120,19 @@ fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager, con
                 call.respond(tokens.map { TokenDto(it.uuid, it.label, it.color.name) })
             }
 
+            get("/connectionStatus"){
+                call.respond("Not connected")
+            }
+
+            get("/capabilities"){
+                val capabilities = ProvisionUtils.fetchTpmInfo()
+                call.respond(capabilities)
+            }
+
+            get("/provision"){
+                call.respond("TBD")
+            }
+
             post("/devices/{deviceId}/connect") {
                 val deviceId = call.parameters["deviceId"]
                 if (deviceId == null) {
@@ -127,6 +141,10 @@ fun startWebServer(deviceManager: DeviceManager, tokenManager: TokenManager, con
                 }
                 connector.connect()
                 call.respond(HttpStatusCode.OK, "Device connected")
+            }
+
+            post("/devices/{deviceId}/tokens/{tokenUuid}/delete") {
+                call.respond(HttpStatusCode.OK, "Token (not really) deleted")
             }
 
             post("/devices/{deviceId}/tokens/{tokenUuid}/decrypt") {

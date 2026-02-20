@@ -35,6 +35,7 @@
         .loading { color: #7f8c8d; font-style: italic; }
         .footer { margin-top: 40px; font-size: 0.8em; color: #aaa; text-align: center; }
         .status-box { background-color: #e8f6f3; border: 1px solid #d4efdf; color: #1e8449; padding: 10px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9em; }
+        .cap-table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.9em; } .cap-table td, .cap-table th { border: 1px solid #ddd; padding: 4px 8px; } .cap-table th { background-color: #f2f2f2; text-align: left; }
     </style>
 </head>
 <body>
@@ -48,6 +49,13 @@
 
     <div id="connectionStatusBox" class="status-box">
         <strong>Connection Status:</strong> <span id="connectionStatusText">Checking...</span>
+    </div>
+
+    <div id="keyCeremonyBox" class="status-box">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex-grow: 1;"><strong>Key Ceremony:</strong> <div id="capabilitiesContainer">Checking...</div></div>
+            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8em;" onclick="handleProvisionClick()">Provision</button>
+        </div>
     </div>
 
     <div id="showCertificate" class="hidden">
@@ -79,6 +87,7 @@
 <script>
     const errorBox = document.getElementById('errorBox');
     const connectionStatusText = document.getElementById('connectionStatusText');
+    const capabilitiesContainer = document.getElementById('capabilitiesContainer');
     const showCertificateDiv = document.getElementById('showCertificate');
     const certImage = document.getElementById('certImage');
     const certTitle = document.getElementById('certTitle');
@@ -160,12 +169,53 @@
                  serverHostname = status.hostname;
                  deviceLoading.textContent = 'Caricamento dispositivi...';
                  loadDevices();
+                 loadCapabilities();
 
              } catch (err) {
                  deviceLoading.classList.add('hidden');
                  showError(err.message);
              }
           }
+
+         async function loadCapabilities() {
+             try {
+                 const res = await fetch('/capabilities');
+                 if (res.ok) {
+                     const data = await res.json();
+                     let tableHtml = '<table class="cap-table"><thead><tr>';
+                     let rowHtml = '<tr>';
+                     
+                     for (const key in data) {
+                         tableHtml += `<th>${key.toUpperCase()}</th>`;
+                         rowHtml += `<td>${data[key]}</td>`;
+                     }
+                     
+                     tableHtml += '</tr></thead><tbody>' + rowHtml + '</tr></tbody></table>';
+                     capabilitiesContainer.innerHTML = tableHtml;
+                 } else {
+                     capabilitiesContainer.textContent = "Errore capabilities";
+                 }
+             } catch (e) {
+                 console.error("Error loading capabilities", e);
+                 capabilitiesContainer.textContent = "Errore connessione";
+             }
+         }
+
+         async function handleProvisionClick() {
+             if (!confirm("Sei sicuro di voler eseguire il provisioning?")) return;
+             try {
+                 const res = await fetch('/provision', { method: 'POST' });
+                 if (res.ok) {
+                     alert("Provisioning completato.");
+                     loadCapabilities();
+                 } else {
+                     const err = await res.text();
+                     alert("Errore provisioning: " + err);
+                 }
+             } catch (e) {
+                 alert("Errore richiesta: " + e.message);
+             }
+         }
 
          async function loadDevices() {
              deviceList.innerHTML = '';
