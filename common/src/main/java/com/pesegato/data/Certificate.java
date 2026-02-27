@@ -1,5 +1,7 @@
 package com.pesegato.data;
 
+import com.pesegato.device.DeviceManager;
+
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -7,11 +9,14 @@ import java.security.NoSuchAlgorithmException;
 public class Certificate {
     String name;
     //String version="1";
+    String pin;
+    String hwid;
     String publicKey;
 
     public Certificate(String name, String publicKey) {
         this.name = name;
         this.publicKey = publicKey;
+        this.hwid = DeviceManager.hwId;
     }
 
     public String getName() {
