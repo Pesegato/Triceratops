@@ -10,7 +10,11 @@ STRING_ID="01"
 HEX_ID="3031"
 
 # Recupero PIN
-PIN=$(cat /run/secrets/tpm_pin)
+# Aggiungi un timeout di 5 secondi. Se il PIN non viene fornito, lo script fallirà.
+if ! read -t 5 -r PIN; then
+    echo "ERRORE: Timeout in attesa del PIN su stdin." >&2
+    exit 1
+fi
 
 echo "🧹 [1/4] Pulizia profonda..."
 tpm2_flushcontext -t || true
@@ -39,6 +43,9 @@ pkcs11-tool --module "$LIB_PKCS11" --login --pin "$PIN" \
     --label "$KEY_LABEL" --id "$HEX_ID"
 
 rm -f temp.key cert.der
+
+pkcs11-tool --module /usr/lib/x86_64-linux-gnu/pkcs11/libtpm2_pkcs11.so \
+    --read-object --type pubkey --label "T9sToken" > tpm_public_key.der
 
 echo "------------------------------------------------"
 echo "✅ PROVISIONING COMPLETATO"

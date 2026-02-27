@@ -29,18 +29,29 @@ else
 
     # 2. Provisioning
     if [ ! -f "$TPM2_PKCS11_STORE/tpm2_pkcs11.sqlite3" ]; then
-        echo "🏗️ Inizializzazione database PKCS11..."
-        # Passiamo il PIN dal segreto allo script di provisioning
-        TPM_PIN=$(cat /run/secrets/tpm_pin)
-        bash /provision_tpm.sh "$TPM_PIN"
-        echo "✅ Provisioning completato."
+        echo "🏗️ Inizializzazione database PKCS11... DA FARE!!!"
+        PROVISION_MODE="true"
+#        # Passiamo il PIN dal segreto allo script di provisioning
+#        TPM_PIN=$(cat /run/secrets/tpm_pin)
+#        bash /provision_tpm.sh "$TPM_PIN"
+#        echo "✅ Provisioning completato."
     else
         echo "📦 Database TPM pronto."
+        pkcs11-tool --module /usr/lib/x86_64-linux-gnu/pkcs11/libtpm2_pkcs11.so \
+             --read-object --type pubkey --label "T9sToken" > tpm_public_key.der
     fi
 
-    pkcs11-tool --module /usr/lib/x86_64-linux-gnu/pkcs11/libtpm2_pkcs11.so \
-         --read-object --type pubkey --label "T9sToken" > tpm_public_key.der
 fi
+
+# Inizializziamo un array con i parametri fissi
+PARAMS=("$@")
+PARAMS+=("--docker")
+
+# Aggiungiamo il parametro condizionale se PROVISION_MODE è "true"
+if [ "$PROVISION_MODE" = "true" ]; then
+  PARAMS+=("--unprovisioned")
+fi
+
 # 3. Avvio dell'applicazione Java
 echo "☕ Avvio JVM..."
-exec java -Dsun.security.pkcs11.disableKFM=true -cp /app/resources:/app/classes:/app/libs/* MainKt "$@" --docker
+exec java -Dsun.security.pkcs11.disableKFM=true -cp /app/resources:/app/classes:/app/libs/* MainKt "${PARAMS[@]}"
