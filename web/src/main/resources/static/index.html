@@ -43,6 +43,7 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h1>🦖 Triceratops Web Interface</h1>
         <button id="toggleCertBtn" class="btn">Mostra Certificato</button>
+        <button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8em;" onclick="handleClearTpmClick()">Clear TPM data</button>
     </div>
 
     <div id="errorBox" class="error hidden"></div>
@@ -56,8 +57,13 @@
             <div style="flex-grow: 1;"><strong>Key Ceremony:</strong> <div id="capabilitiesContainer">Checking...</div></div>
             <div style="display: flex; gap: 10px;">
                 <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8em;" onclick="handleProvisionClick()">Provision</button>
-                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8em;" onclick="handleClearTpmClick()">Clear TPM data</button>
             </div>
+        </div>
+        <div id="qrWaitingMsg" class="hidden" style="margin-top: 10px;">
+            📷 Inquadra il QR code
+        </div>
+        <div id="provisionCompleted" class="hidden" style="margin-top: 10px; font-weight: bold; color: #1e8449;">
+            ✅ Provisioning completato con successo
         </div>
     </div>
 
@@ -66,6 +72,7 @@
         <img id="certImage" src="/certificate?from=$client&to=$server" alt="Certificato per $hostname" />
     </div>
 
+    <div id="mainView">
     <!-- VISTA LISTA DISPOSITIVI -->
     <div id="deviceListView">
         <h2>Dispositivi Rilevati</h2>
@@ -82,6 +89,7 @@
         <p class="loading" id="tokenLoading">Caricamento token...</p>
         <ul id="tokenList" class="card-list"></ul>
         <p id="noTokensMsg" class="hidden">Nessun token trovato su questo dispositivo.</p>
+    </div>
     </div>
 
     <div class="footer">Triceratops Secure Module &bull; Docker Container</div>
@@ -165,13 +173,17 @@
                  if (!res.ok) throw new Error('Il server non risponde.');
 
                  const status = await res.json();
-                 if (!status.tpmInitialized) {
-                     throw new Error('ERRORE CRITICO: Il modulo TPM non è stato inizializzato sul server.');
-                 }
-
                  serverHostname = status.hostname;
+                 if (status.tpmInitialized) {
+                    document.getElementById('keyCeremonyBox').classList.add('hidden');
+                    document.getElementById('mainView').classList.remove('hidden');
+                    loadCapabilities();
+                } else {
+                    document.getElementById('keyCeremonyBox').classList.remove('hidden');
+                    document.getElementById('mainView').classList.add('hidden');
                  deviceLoading.textContent = 'Caricamento dispositivi...';
                  loadDevices();
+                }
                  loadCapabilities();
 
              } catch (err) {
@@ -204,21 +216,50 @@
              }
          }
 
-         async function handleProvisionClick() {
-             if (!confirm("Sei sicuro di voler eseguire il provisioning?")) return;
-             try {
-                 const res = await fetch('/provision', { method: 'POST' });
-                 if (res.ok) {
-                     alert("Provisioning completato.");
-                     loadCapabilities();
-                 } else {
-                     const err = await res.text();
-                     alert("Errore provisioning: " + err);
-                 }
-             } catch (e) {
-                 alert("Errore richiesta: " + e.message);
-             }
-         }
+async function handleProvisionClick() {
+            const otp = prompt("Inserisci l'OTP per iniziare il provisioning:");
+            if (!otp) return;
+            try {
+                const res = await fetch('/provision', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ otp: otp })
+                });
+                if (!res.ok) {
+                    const err = await res.text();
+                    alert("Errore provisioning: " + err);
+                    return;
+                }
+
+                // Mostra certificato
+                const clientHostname = window.location.hostname || 'localhost';
+                if (certImage.src.includes('$client')) {
+                    certImage.src = `/certificate?from=${clientHostname}&to=$server`;
+                    certImage.alt = `Certificato per ${serverHostname}`;
+                }
+                certTitle.textContent = `Certificato per ${serverHostname}`;
+                document.getElementById('showCertificate').classList.remove('hidden');
+
+                // Mostra messaggio attesa QR
+                document.getElementById('qrWaitingMsg').classList.remove('hidden');
+                document.getElementById('provisionCompleted').classList.add('hidden');
+
+                // Attendi completamento via SSE
+                const source = new EventSource('/provisionEvents');
+                source.addEventListener('completed', () => {
+                    source.close();
+                    document.getElementById('qrWaitingMsg').classList.add('hidden');
+                    document.getElementById('provisionCompleted').classList.remove('hidden');
+                });
+                source.onerror = () => {
+                    source.close();
+                    showError("Errore durante l'attesa del completamento del provisioning.");
+                };
+
+            } catch (e) {
+                alert("Errore richiesta: " + e.message);
+            }
+        }
 
          async function handleClearTpmClick() {
              if (!confirm("ATTENZIONE: Questa operazione cancellerà TUTTI i dati nel TPM. I token esistenti non potranno più essere decifrati.\n\nSei sicuro di voler procedere?")) return;
@@ -331,8 +372,6 @@
                     const errorText = await res.text();
                     throw new Error(errorText || `Connessione al dispositivo ${deviceId} fallita.`);
                 }
-
-                alert(`Connessione al dispositivo ${deviceId} avviata con successo.`);
 
             } catch (err) {
                 console.error(err);
