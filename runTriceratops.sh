@@ -108,11 +108,10 @@ else
           fi
     else
         HW_ID=$(cat /sys/class/dmi/id/product_uuid 2>/dev/null || cat /etc/machine-id 2>/dev/null || hostname)
-        TPM_PIN=$(echo -n "$HW_ID" | openssl dgst -sha256 -binary | base64 | head -c 16)
     fi
 fi
 
-echo -n "$TPM_PIN" > "$TMP_PIN_FILE"
+echo -n "$HW_ID" > "$TMP_PIN_FILE"
 chmod 400 "$TMP_PIN_FILE"
 
 docker run --rm -it \
