@@ -75,7 +75,10 @@
     <div id="mainView">
     <!-- VISTA LISTA DISPOSITIVI -->
     <div id="deviceListView">
-        <h2>Dispositivi Rilevati</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>Dispositivi Rilevati</h2>
+            <button class="btn" onclick="handleAddTokenClick()">+ Add Token</button>
+        </div>
         <p class="loading" id="deviceLoading">Caricamento dispositivi...</p>
         <ul id="deviceList" class="card-list"></ul>
     </div>
@@ -177,15 +180,13 @@
                  if (status.tpmInitialized) {
                     document.getElementById('keyCeremonyBox').classList.add('hidden');
                     document.getElementById('mainView').classList.remove('hidden');
-                    loadCapabilities();
+                 loadDevices();
                 } else {
                     document.getElementById('keyCeremonyBox').classList.remove('hidden');
                     document.getElementById('mainView').classList.add('hidden');
                  deviceLoading.textContent = 'Caricamento dispositivi...';
-                 loadDevices();
+                    loadCapabilities();
                 }
-                 loadCapabilities();
-
              } catch (err) {
                  deviceLoading.classList.add('hidden');
                  showError(err.message);
@@ -396,14 +397,25 @@ async function handleProvisionClick() {
             }
         }
 async function handleDecryptClick(btn, deviceId, tokenUuid) {
-    const totp = prompt("Inserisci il codice TOTP:");
-    if (!totp) return;
 
     const originalText = btn.textContent;
     btn.textContent = "Decifrazione...";
     btn.disabled = true;
 
     try {
+        // 1. Chiama l'endpoint /unlock
+        const unlockRes = await fetch('/unlock', { method: 'POST' });
+        if (!unlockRes.ok) {
+            const errorText = await unlockRes.text();
+            throw new Error(errorText || 'Unlock fallito.');
+        }
+
+        // 2. Solo se l'unlock ha successo, chiedi il TOTP
+        const totp = prompt("Unlock OK. Inserisci il codice TOTP:");
+        if (!totp) {
+            throw new Error("Operazione annullata.");
+        }
+
         // 1. Genera coppia di chiavi RSA-OAEP nel browser
         const keyPair = await window.crypto.subtle.generateKey(
             {
@@ -430,15 +442,40 @@ async function handleDecryptClick(btn, deviceId, tokenUuid) {
             })
         });
 
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({ error: 'Unknown server error' }));
+            throw new Error(errorData.error || 'Decryption request failed.');
+        }
         const responseData = await res.json();
-        if (!res.ok || responseData.error) throw new Error(responseData.error);
 
-        // 4. Decifra la risposta usando la Chiave Privata (che non ha mai lasciato il browser)
-        const encryptedBytes = Uint8Array.from(atob(responseData.encryptedResult), c => c.charCodeAt(0));
-        const decryptedBuffer = await window.crypto.subtle.decrypt(
-            { name: "RSA-OAEP" },
+        // --- HYBRID DECRYPTION IN BROWSER ---
+
+        // 4a. Decode the components from Base64
+        const encryptedAesKeyBytes = Uint8Array.from(atob(responseData.encryptedKey), c => c.charCodeAt(0));
+        const ivBytes = Uint8Array.from(atob(responseData.iv), c => c.charCodeAt(0));
+        const encryptedDataBytes = Uint8Array.from(atob(responseData.data), c => c.charCodeAt(0));
+
+        // 4b. Decrypt the AES key using the browser's private RSA key
+        const decryptedAesKey = await window.crypto.subtle.decrypt(
+            { name: "RSA-OAEP" }, // Must match server-side padding
             keyPair.privateKey,
-            encryptedBytes
+            encryptedAesKeyBytes
+        );
+
+        // 4c. Import the raw AES key for use with Web Crypto API
+        const aesKey = await window.crypto.subtle.importKey(
+            "raw",
+            decryptedAesKey,
+            { name: "AES-GCM" },
+            false, // not exportable
+            ["decrypt"]
+        );
+
+        // 4d. Decrypt the final data using the AES key and IV
+        const decryptedBuffer = await window.crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: ivBytes },
+            aesKey,
+            encryptedDataBytes
         );
 
         const secret = new TextDecoder().decode(decryptedBuffer);
@@ -463,6 +500,25 @@ async function handleDecryptClick(btn, deviceId, tokenUuid) {
         showError(err.message);
         btn.textContent = originalText;
         btn.disabled = false;
+    }
+}
+
+async function handleAddTokenClick() {
+    try {
+        const res = await fetch('/addtoken', {
+            method: 'POST'
+        });
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(errorText || `Failed to add token.`);
+        }
+
+        alert("Token added successfully.");
+        loadDevices(); // Refresh device list
+    } catch (err) {
+        console.error(err);
+        showError(err.message);
     }
 }
 </script>
