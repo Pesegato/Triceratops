@@ -28,6 +28,16 @@ public class SecurityFactory {
         throw new UnsupportedOperationException("Sistema operativo non supportato.");
     }
 
+    public static KeyProtector getProvisionalProtector() {
+        KeyProtector keyProtector = new EphemeralManager();
+        try {
+            keyProtector.initialize(TOKEN_LABEL);
+        } catch (Exception e) {
+            System.out.println("❌ Errore inizializzazione RAM: " + e.getMessage());
+        }
+        return keyProtector;
+    }
+
     public static KeyProtector getProtectorFromConfig() throws Exception {
 
         String algo = Config.getAlgorithm();

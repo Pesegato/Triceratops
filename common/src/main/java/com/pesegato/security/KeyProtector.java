@@ -12,4 +12,7 @@ public interface KeyProtector {
     byte[] decrypt(byte[] encryptedData) throws Exception;
 
     void test() throws Exception;
+
+    void setPIN(String pin);
+
 }

@@ -77,6 +77,11 @@ public class SoftwareManager implements KeyProtector {
 
     @Override
     public void test() throws Exception {
+        System.out.println("TEST SWMANAGERRR???");
+    }
+
+    @Override
+    public void setPIN(String pin) {
 
     }
 

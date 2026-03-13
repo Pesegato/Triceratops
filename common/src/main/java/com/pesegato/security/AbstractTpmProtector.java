@@ -2,20 +2,21 @@ package com.pesegato.security;
 
 import javax.crypto.Cipher;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.security.*;
 import java.util.Arrays;
 
 public abstract class AbstractTpmProtector implements KeyProtector {
     protected final String configPath;
-    protected final String pin;
+    protected String pin;
     protected Provider pkcs11Provider;
     protected String alias;
 
     public AbstractTpmProtector() throws Exception {
         this.configPath = "/tpm2.cfg";
-        this.pin = Files.readString(Paths.get("/run/secrets/tpm_pin")).trim();
+    }
+
+    public void setPIN(String pin) {
+        this.pin = pin;
     }
 
     @Override

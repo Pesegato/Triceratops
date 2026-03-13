@@ -45,4 +45,9 @@ public class WindowsKeyProtector implements KeyProtector {
     public void test() throws Exception {
 
     }
+
+    @Override
+    public void setPIN(String pin) {
+
+    }
 }
