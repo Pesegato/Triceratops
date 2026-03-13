@@ -2,32 +2,15 @@ package com.pesegato.data;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
-import com.google.zxing.client.j2se.MatrixToImageConfig;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
-import com.itextpdf.io.font.constants.StandardFonts;
-import com.itextpdf.io.image.ImageDataFactory;
-import com.itextpdf.kernel.colors.Color;
-import com.itextpdf.kernel.colors.ColorConstants;
-import com.itextpdf.kernel.colors.DeviceRgb;
-import com.itextpdf.kernel.font.PdfFont;
-import com.itextpdf.kernel.font.PdfFontFactory;
-import com.itextpdf.kernel.geom.PageSize;
-import com.itextpdf.kernel.pdf.PdfDocument;
-import com.itextpdf.kernel.pdf.PdfWriter;
-import com.itextpdf.layout.Document;
-import com.itextpdf.layout.element.Image;
-import com.itextpdf.layout.element.Paragraph;
-import com.itextpdf.layout.properties.HorizontalAlignment;
-import com.pesegato.data.Certificate;
-import com.pesegato.data.Token;
-import com.pesegato.data.TokenPart;
-import com.squareup.moshi.JsonAdapter;
-import com.squareup.moshi.Moshi;
+import com.itextpdf.kernel.xmp.impl.Base64;
+import io.yurelle.Base45;
 
 import javax.swing.*;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 
 public class QRCoder {
 
@@ -41,6 +24,42 @@ public class QRCoder {
 
         } catch (WriterException e) {
             System.err.println("Could not generate QR Code: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public static BufferedImage getChroma(byte[] data) {
+        System.out.println("Certificate B: " + new String(data));
+        try {
+            // Da Java, gli object Kotlin si accedono con .INSTANCE
+            // Bisogna usare la sintassi Java (tipi espliciti e argomenti posizionali)
+            ChromaRecommendation rec = ChromaCodeProfile.INSTANCE.recommend(data, 800);
+            System.out.println(rec.getReason());
+            BufferedImage img = ChromaCode.INSTANCE.encode(
+                    data,
+                    rec.getProfile(),
+                    rec.getEccRatio(),
+                    rec.getCellSize()
+            );
+            return img; // Restituisce l'immagine generata
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public static BufferedImage getB45(byte[] data) {
+        System.out.println("Certificate Base64: " + new String(Base64.encode(data)));
+        System.out.println("---");
+
+        try {
+            String certBase45 = Base45.encode(data);
+            System.out.println("Certificate Base45: " + certBase45);
+            System.out.println("---");
+            return showQRCodeOnScreenBI(certBase45);
+
+        } catch (IOException e) {
+            System.err.println("Could not generate QR Code of Base45: " + e.getMessage());
         }
         return null;
     }
