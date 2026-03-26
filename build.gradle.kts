@@ -25,12 +25,6 @@ extra["fullVersion"] = fullVersion
 subprojects {
     version = cleanVersion
 
-    repositories {
-        mavenCentral()
-        maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
-        maven("https://maven.google.com/")
-    }
-
     plugins.withId("org.jetbrains.kotlin.jvm") {
         extensions.configure<KotlinJvmProjectExtension> {
             jvmToolchain(21)
