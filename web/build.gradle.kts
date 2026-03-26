@@ -8,6 +8,7 @@ version = "1.0.0"
 
 dependencies {
     // Dipendenza dal modulo condiviso (RSACrypt, DeviceManager, ecc.)
+    implementation(project(":core"))
     implementation(project(":common"))
 
     // Ktor Server
