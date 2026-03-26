@@ -1,7 +1,6 @@
-package com.pesegato.security
+package com.pesegato.core
 
 import java.io.ByteArrayOutputStream
-
 
 object EmojiCode {
 // ─── Alfabeto: esattamente 1024 emoji unici (10 bit per simbolo) ──────────────
