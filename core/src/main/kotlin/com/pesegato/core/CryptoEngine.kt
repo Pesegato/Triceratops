@@ -14,11 +14,16 @@ import kotlin.io.encoding.Base64
 object CryptoEngine {
     val secureRandom: SecureRandom = SecureRandom()
 
+    val ITERATION_BEST = 1000000
+    val ITERATION_AVG_2 = 50000 //3 secondi sul POCO!
+    val ITERATION_AVG_1 = 10000
+    val ITERATION_FAST = 5000
+
     // --- 1. GESTIONE OTP E KDF ---
 
     // Espande l'OTP di 8 caratteri in una chiave lunga quanto serve (es. per XOR o AES)
     fun deriveKeyFromOTP(otp: String, salt: ByteArray, lengthBytes: Int): ByteArray {
-        val spec = PBEKeySpec(otp.toCharArray(), salt, 10000, lengthBytes * 8)
+        val spec = PBEKeySpec(otp.toCharArray(), salt, ITERATION_AVG_1, lengthBytes * 8)
         val skf = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
         return skf.generateSecret(spec).encoded
     }
@@ -102,7 +107,7 @@ object CryptoEngine {
         val spec = PBEKeySpec(
             Base64.encode(combinedSeed).toCharArray(),
             salt,
-            5000,
+            ITERATION_FAST,
             length * 8
         )
         val skf = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
