@@ -22,7 +22,7 @@ object SecretGenerator {
             .joinToString("")
     }
 
-    fun generateOTPSecret(): String {
+    fun generateOTPL1(): String {
         val numChars = "0123456789"
         val sb = StringBuilder(6)
         for (i in 0 until 6) {
