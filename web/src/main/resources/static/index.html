@@ -221,16 +221,6 @@ async function handleProvisionClick() {
             const otp = prompt("Inserisci l'OTP per iniziare il provisioning:");
             if (!otp) return;
             try {
-                const res = await fetch('/provision', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ otp: otp })
-                });
-                if (!res.ok) {
-                    const err = await res.text();
-                    alert("Errore provisioning: " + err);
-                    return;
-                }
 
                 // Mostra certificato
                 const clientHostname = window.location.hostname || 'localhost';
@@ -245,15 +235,46 @@ async function handleProvisionClick() {
                 document.getElementById('qrWaitingMsg').classList.remove('hidden');
                 document.getElementById('provisionCompleted').classList.add('hidden');
 
+                const res = await fetch('/provision', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ otp: otp })
+                });
+                if (!res.ok) {
+                    const err = await res.text();
+                    alert("Errore provisioning: " + err);
+                    return;
+                }
+                 const data = await res.json();
+
+                 if (!confirm(`Codice di sicurezza (SAS): ${data.sas}\n\nCorrisponde a quello mostrato sul dispositivo?`)) {
+                     // Pulizia interfaccia se l'utente annulla
+                     document.getElementById('showCertificate').classList.add('hidden');
+                     document.getElementById('qrWaitingMsg').classList.add('hidden');
+                     toggleCertBtn.textContent = 'Mostra Certificato';
+                     return;
+                 }
+
+                 const confirmRes = await fetch('/confirmProvision', { method: 'POST' });
+                 if (!confirmRes.ok) {
+                     document.getElementById('qrWaitingMsg').classList.add('hidden');
+                     alert("Errore durante la conferma del provisioning.");
+                     return;
+                 }
+
                 // Attendi completamento via SSE
                 const source = new EventSource('/provisionEvents');
                 source.addEventListener('completed', () => {
                     source.close();
+                    // Nascondiamo tutto il blocco di attesa e il certificato
                     document.getElementById('qrWaitingMsg').classList.add('hidden');
+                    document.getElementById('showCertificate').classList.add('hidden');
                     document.getElementById('provisionCompleted').classList.remove('hidden');
+                    toggleCertBtn.textContent = 'Mostra Certificato';
                 });
                 source.onerror = () => {
                     source.close();
+                    document.getElementById('qrWaitingMsg').classList.add('hidden');
                     showError("Errore durante l'attesa del completamento del provisioning.");
                 };
 
@@ -364,19 +385,33 @@ async function handleProvisionClick() {
 
         async function handleConnectClick(deviceId, event) {
             event.stopPropagation(); // Evita di triggerare l'onclick per mostrare i token
+            const otp = prompt("Inserisci l'OTP per iniziare handshake:");
+            if (!otp) return;
             try {
                 const res = await fetch(`/devices/${deviceId}/connect`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ otp: otp })
                 });
-
                 if (!res.ok) {
-                    const errorText = await res.text();
-                    throw new Error(errorText || `Connessione al dispositivo ${deviceId} fallita.`);
+                    const err = await res.text();
+                    alert("Handshake error: " + err);
+                    return;
                 }
+                const data = await res.json();
 
-            } catch (err) {
-                console.error(err);
-                showError(err.message);
+                if (confirm(`Codice di sicurezza (SAS): ${data.sas}\n\nCorrisponde a quello mostrato sul dispositivo?`)) {
+                    const confirmRes = await fetch('/devices/${deviceId}/confirmHandshake', {
+                        method: 'POST'
+                    });
+                    if (confirmRes.ok) {
+                        alert("Handshake successfully completed.");
+                    } else {
+                        alert("Confirmation error.");
+                    }
+                }
+            } catch (e) {
+                alert("Error: " + e.message);
             }
         }
 
