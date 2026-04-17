@@ -54,7 +54,7 @@ reset_tpm() {
           --entrypoint "/bin/bash" \
           --device /dev/tpmrm0:/dev/tpmrm0 \
           -v tpm_data:/var/lib/tpm2-pkcs11 \
-          triceratops-app "/clean_tpm.sh" "--factory"
+          ghcr.io/pesegato/triceratops-app "/clean_tpm.sh" "--factory"
 
         echo "🧹 Rimozione database PKCS11 (Docker Volume)..."
         # Rimuoviamo il volume docker se esiste, o la cartella locale
