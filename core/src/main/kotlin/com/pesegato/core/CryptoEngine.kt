@@ -56,21 +56,6 @@ object CryptoEngine {
     }
 
     // --- 4. SEGRETO CONDIVISO E AES ---
-    /**
-     * @deprecated use deriveFinalKeyAndSAS
-     */
-@Deprecated("use deriveFinalKeyAndSAS")
-    fun deriveAESKey(myPrivateKey: PrivateKey, theirPublicKeyBytes: ByteArray): SecretKeySpec {
-        val kf = KeyFactory.getInstance("DiffieHellman")
-        val theirPubKey = kf.generatePublic(X509EncodedKeySpec(theirPublicKeyBytes))
-        val ka = KeyAgreement.getInstance("DiffieHellman")
-        ka.init(myPrivateKey)
-        ka.doPhase(theirPubKey, true)
-
-        val sharedSecret = ka.generateSecret()
-        val digest = MessageDigest.getInstance("SHA-256")
-        return SecretKeySpec(digest.digest(sharedSecret), "AES")
-    }
 
     fun encryptB(data: ByteArray, key: SecretKeySpec): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -149,46 +134,6 @@ object CryptoEngine {
     // Viene inviato CIFRATO dentro la sessione attuale
     fun prepareNextSessionPacket(nextOtp: ByteArray): String {
         return Base64.encode(nextOtp)
-    }
-    /*
-        // 3. Esegue il DH "Leggero" usando l'OTP precedente per offuscare
-        fun performLightweightExchange(socket: Socket, savedOtp: ByteArray, isServer: Boolean): SecretKeySpec {
-            val salt = "RatchetSaltV1".toByteArray()
-
-            return if (isServer) {
-                // Lato A
-                val keyPairA = CryptoEngine.generateInitialKeyPair()
-                NetworkUtils.sendPacket(socket, keyPairA.public.encoded)
-
-                val pubBOffuscata = NetworkUtils.receivePacket(socket)
-                val otpExpanded = CryptoEngine.deriveKeyFromOTP(Base64.getEncoder().encodeToString(savedOtp), salt, pubBOffuscata.size)
-                val pubBReale = CryptoEngine.applyXOR(pubBOffuscata, otpExpanded)
-
-                CryptoEngine.deriveAESKey(keyPairA.private, pubBReale)
-            } else {
-                // Lato B
-                val pubA = NetworkUtils.receivePacket(socket)
-                val keyPairB = CryptoEngine.generateSecondaryKeyPair(pubA)
-                val pubB = keyPairB.public.encoded
-
-                val otpExpanded = CryptoEngine.deriveKeyFromOTP(Base64.getEncoder().encodeToString(savedOtp), salt, pubB.size)
-                val pubBOffuscata = CryptoEngine.applyXOR(pubB, otpExpanded)
-                NetworkUtils.sendPacket(socket, pubBOffuscata)
-
-                CryptoEngine.deriveAESKey(keyPairB.private, pubA)
-            }
-        }
-    */
-
-    fun generateSAS(sharedSecret: ByteArray): String {
-        val hash = MessageDigest.getInstance("SHA-256").digest(sharedSecret)
-        // Prendiamo i primi 3 byte e convertiamoli in un numero o in una stringa leggibile
-        // Ad esempio, un numero a 5 cifre o 4 caratteri Base32
-        val sasValue = ((hash[0].toInt() and 0xFF) shl 16) or
-                ((hash[1].toInt() and 0xFF) shl 8) or
-                (hash[2].toInt() and 0xFF)
-
-        return String.format("%05d", sasValue % 100000) // Restituisce un codice tipo "48291"
     }
 
 }
